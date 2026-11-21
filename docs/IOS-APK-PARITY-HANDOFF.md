@@ -1,5 +1,18 @@
 # Expert AI iOS / APK parity handoff
 
+## Keyboard fix follow-up — 22 November 2026
+
+The owner confirmed the uploaded iOS build 5 still has keyboard/composer
+problems. The next iOS candidate (build 6) ports the tested APK height-based
+show/hide strategy to Simple Chat and fixes duplicated resting safe-area spacing
+in Agent Chat. Simple Chat previously derived its lift from `screenY` and
+`useWindowDimensions().height` even though those values use different coordinate
+spaces, and it did not subscribe to `keyboardWillHide`. Agent Chat used the
+correct keyboard events but stacked the parent inset with the child's resting
+padding. No Android files or behavior were changed. Source checks passed; test
+the signed build on a physical iPhone with QuickType enabled and after keyboard
+dismissal before calling the keyboard fix verified.
+
 ## Current iOS release candidate — 20 November 2026
 
 This section supersedes older pending-status notes below. The active iOS

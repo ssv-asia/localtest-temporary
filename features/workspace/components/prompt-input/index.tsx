@@ -479,9 +479,9 @@ export function PromptInput({
           transform: [{ translateY: slideAnim }],
           // Match the safe-area amount removed by the parent keyboard offset;
           // a fixed 24pt left the composer misaligned on some iPhone sizes.
-          paddingBottom: keyboardVisible && !isWideScreen
-            ? Platform.OS === "ios" ? insets.bottom : 24
-            : 12,
+          paddingBottom: Platform.OS === "ios"
+            ? keyboardVisible ? insets.bottom : Math.max(12, insets.bottom)
+            : keyboardVisible && !isWideScreen ? 24 : 12,
         },
       ]}
     >

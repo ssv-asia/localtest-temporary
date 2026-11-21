@@ -6,7 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // adjustNothing window mode leaves the composer under the keyboard otherwise.
 export function useAgentKeyboardPadding() {
   const insets = useSafeAreaInsets();
-  const padding = useRef(new Animated.Value(insets.bottom)).current;
+  // On iOS the PromptInput owns its resting safe-area spacing. Starting the
+  // parent at the same inset duplicated that space and left a visible gap.
+  const padding = useRef(new Animated.Value(Platform.OS === 'ios' ? 0 : insets.bottom)).current;
 
   useEffect(() => {
     // Browser viewports already resize for the on-screen keyboard. Applying the
@@ -28,7 +30,7 @@ export function useAgentKeyboardPadding() {
     const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
       padding.stopAnimation();
       Animated.timing(padding, {
-        toValue: insets.bottom, duration: 160, easing: Easing.out(Easing.cubic),
+        toValue: Platform.OS === 'ios' ? 0 : insets.bottom, duration: 160, easing: Easing.out(Easing.cubic),
         isInteraction: false, useNativeDriver: false,
       }).start();
     });

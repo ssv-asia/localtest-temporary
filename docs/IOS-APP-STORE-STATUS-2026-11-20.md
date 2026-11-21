@@ -6,6 +6,27 @@
 > `C:\expert-ai-ios-localtest-temporary`; App Store Connect signing credentials
 > are confirmed by successful signed/upload workflow runs later in this log.
 
+## Keyboard correction after build 5 — 22 November 2026
+
+- The owner confirmed build 5 is present in internal TestFlight but still has
+  composer overlap in Simple Chat and extra bottom spacing when the keyboard
+  closes. Agent Chat must be checked as a separate composer path.
+- Source cause in Simple Chat: iOS used `keyboardWillChangeFrame` and compared
+  the keyboard's screen-coordinate `screenY` to the app-window height, and had
+  no explicit iOS `keyboardWillHide` reset. This could miscalculate the lift
+  and leave the composer in a stale inset state. The APK's tested path uses
+  keyboard show/hide events and one safe-area adjustment.
+- Agent Chat already had explicit show/hide listeners, but its parent started
+  with the bottom safe-area inset while `PromptInput` also added bottom spacing.
+  The iOS candidate now lets `PromptInput` own the resting safe area and keeps
+  the parent offset at zero when the keyboard is hidden.
+- Both Simple Chat and Agent Chat now use the APK-aligned keyboard-height
+  calculation and explicit hide reset. Android source was not changed.
+- Candidate build number is `1.5.3 (6)`. TypeScript passes; targeted ESLint has
+  zero errors and one existing BOM warning in `PromptInput`. Device acceptance
+  on an iPhone with QuickType enabled is still required; the upload is not yet
+  complete.
+
 ## Current source and production identity
 
 - Source/build repository for this release work: `ssv-asia/localtest-temporary`, `main`, in isolated checkout `C:\expert-ai-ios-localtest-temporary`. Android's organization repository remains reference-only.

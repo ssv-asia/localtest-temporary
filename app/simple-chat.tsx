@@ -18,8 +18,6 @@ import {
   TextInput,
   ToastAndroid,
   View,
-  type KeyboardEvent,
-  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -1107,7 +1105,6 @@ export default function SimpleChatScreen() {
   // Follow the selected app theme rather than the phone's system setting.
   const isDark = !isLightThemeBackground(colors.background);
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
   const router = useRouter();
 
   // Android share-sheet target: text or a link shared from any other app
@@ -1121,27 +1118,19 @@ export default function SimpleChatScreen() {
     router.push('/(app)/servers');
   }, [router]);
 
-  // Keep Android's measured lift and follow iOS keyboard frame changes. Using
-  // the full docked iOS overlap keeps the composer above QuickType; a floating
-  // iPad keyboard does not lift the entire chat layout.
+  // Use the validated APK keyboard contract on both platforms: explicit show
+  // and hide events with one safe-area adjustment. iOS keyboard frame screen
+  // coordinates must not be mixed with the app window height.
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const keyboardPadding = useRef(new Animated.Value(0)).current;
-  const [iosKeyboardPadding, setIosKeyboardPadding] = useState(0);
   useEffect(() => {
-    const updateKeyboardFrame = (event: KeyboardEvent) => {
-      if (Platform.OS === 'ios') {
-        const { height, screenY } = event.endCoordinates;
-        // The screen height is larger than the active window in iPad Split
-        // View/Stage Manager. Compare against the current window so a docked
-        // keyboard there is recognized while floating keyboards stay put.
-        setIsKeyboardVisible(height > 0);
-        const reachesBottom = screenY + height >= windowHeight - 1;
-        Keyboard.scheduleLayoutAnimation(event);
-        setIosKeyboardPadding(reachesBottom ? Math.max(0, windowHeight - screenY) : 0);
-        return;
-      }
-      const height = event.endCoordinates.height + insets.bottom;
-      setIsKeyboardVisible(height > 0);
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      const height = Platform.OS === 'ios'
+        ? event.endCoordinates.height - insets.bottom
+        : event.endCoordinates.height + insets.bottom;
+      setIsKeyboardVisible(true);
       keyboardPadding.stopAnimation();
       Animated.timing(keyboardPadding, {
         toValue: Math.max(0, height),
@@ -1150,10 +1139,8 @@ export default function SimpleChatScreen() {
         isInteraction: false,
         useNativeDriver: false,
       }).start();
-    };
-    const showSub = Platform.OS === 'ios' ? null : Keyboard.addListener('keyboardDidShow', updateKeyboardFrame);
-    const frameSub = Platform.OS === 'ios' ? Keyboard.addListener('keyboardWillChangeFrame', updateKeyboardFrame) : null;
-    const hideSub = Platform.OS !== 'ios' ? Keyboard.addListener('keyboardDidHide', () => {
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
       setIsKeyboardVisible(false);
       keyboardPadding.stopAnimation();
       Animated.timing(keyboardPadding, {
@@ -1163,9 +1150,9 @@ export default function SimpleChatScreen() {
         isInteraction: false,
         useNativeDriver: false,
       }).start();
-    }) : null;
-    return () => { showSub?.remove(); frameSub?.remove(); hideSub?.remove(); };
-  }, [keyboardPadding, insets.bottom, windowHeight]);
+    });
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, [keyboardPadding, insets.bottom]);
 
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const messagesRef = useRef<DisplayMessage[]>(messages);
@@ -5807,7 +5794,7 @@ export default function SimpleChatScreen() {
         styles.container,
         {
           backgroundColor: colors.background,
-          paddingBottom: Platform.OS === 'ios' ? iosKeyboardPadding : keyboardPadding,
+          paddingBottom: keyboardPadding,
         },
       ]}
     >
