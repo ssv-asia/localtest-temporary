@@ -209,7 +209,9 @@ export const MessageList = memo(function MessageList({
         updateCellsBatchingPeriod={50}
         windowSize={WINDOW_SIZE}
         removeClippedSubviews={false}
-        keyboardShouldPersistTaps="handled"
+        // Tapping the conversation dismisses the keyboard; toolbar actions are
+        // outside this list and continue to respond normally.
+        keyboardShouldPersistTaps="never"
         keyboardDismissMode="interactive"
         showsVerticalScrollIndicator={false}
         maintainVisibleContentPosition={{

@@ -1658,6 +1658,7 @@ export default function SimpleChatScreen() {
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
   const [accountInfoToken, setAccountInfoToken] = useState<string | null>(null);
   const [refreshingAccount, setRefreshingAccount] = useState(false);
+  const [accountRefreshRevision, setAccountRefreshRevision] = useState(0);
   const [signingOutEverywhere, setSigningOutEverywhere] = useState(false);
   const [restoringPurchases, setRestoringPurchases] = useState(false);
 
@@ -1918,6 +1919,7 @@ export default function SimpleChatScreen() {
       setBalanceToken(session.token);
       setAccountInfo(nextAccount);
       setAccountInfoToken(session.token);
+      setAccountRefreshRevision((revision) => revision + 1);
     } catch {
       // Keep the last confirmed data for this same account; the sheet provides a retry.
     } finally {
@@ -6224,7 +6226,7 @@ export default function SimpleChatScreen() {
           maxWidth: 720,
           alignSelf: 'center',
         }}
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="never"
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         showsVerticalScrollIndicator={false}
       >
@@ -7231,6 +7233,8 @@ export default function SimpleChatScreen() {
             </> : Platform.OS === 'ios' ? (
               <AppleSubscriptions
                 colors={colors}
+                accountRefreshRevision={accountRefreshRevision}
+                accountActive={!!confirmedBalance?.passActive}
                 onEntitlementUpdated={(nextBalance, nextAccount, token) => {
                   confirmedBalanceByToken.set(token, nextBalance);
                   setBalance(nextBalance);

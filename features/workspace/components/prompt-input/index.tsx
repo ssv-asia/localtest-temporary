@@ -21,6 +21,7 @@ import { Fonts, WorkspaceColors } from "@/constants/theme";
 import { formatAgentModeLabel } from "@/features/agent/mode";
 import { useAgentSession, useAgentConfig, usePiClient } from "@expertai/client";
 import { useResponsiveLayout } from "@/features/navigation/hooks/use-responsive-layout";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSpeechRecognition } from "@/features/speech/hooks/use-speech-recognition";
 import { useSpeechSettingsStore } from "@/features/speech/store";
 
@@ -100,6 +101,7 @@ export function PromptInput({
 }: PromptInputProps) {
   const theme = usePromptTheme();
   const { isWideScreen } = useResponsiveLayout();
+  const insets = useSafeAreaInsets();
   const inputRef = useRef<TextInput>(null);
   const shouldAnimateEntry = !sessionId;
   const isStartingSession = !!sessionId && !sessionReady;
@@ -475,7 +477,11 @@ export function PromptInput({
         {
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
-          paddingBottom: keyboardVisible && !isWideScreen ? 24 : 12,
+          // Match the safe-area amount removed by the parent keyboard offset;
+          // a fixed 24pt left the composer misaligned on some iPhone sizes.
+          paddingBottom: keyboardVisible && !isWideScreen
+            ? Platform.OS === "ios" ? insets.bottom : 24
+            : 12,
         },
       ]}
     >

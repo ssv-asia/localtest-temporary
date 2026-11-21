@@ -11,6 +11,8 @@ import type { AccountInfo, BalanceInfo } from '@/lib/gateway-client';
 type Props = {
   colors: { text: string; textSecondary: string; textTertiary: string; accent: string; border: string; buttonBackground: string; onTint?: string };
   onEntitlementUpdated: (balance: BalanceInfo, account: AccountInfo, token: string) => void;
+  accountRefreshRevision: number;
+  accountActive: boolean;
 };
 
 const planColors: Record<number, string> = {
@@ -27,7 +29,7 @@ const OWLS: Record<number, string> = {
   14: '10-foundational-enterprise-256-4.webp',
 };
 
-export function AppleSubscriptions({ colors, onEntitlementUpdated }: Props) {
+export function AppleSubscriptions({ colors, onEntitlementUpdated, accountRefreshRevision, accountActive }: Props) {
   const [selected, setSelected] = useState(12);
   const [period, setPeriod] = useState<PlanBillingPeriod>('monthly');
   const [busyProduct, setBusyProduct] = useState<string | null>(null);
@@ -35,6 +37,7 @@ export function AppleSubscriptions({ colors, onEntitlementUpdated }: Props) {
   const [refreshingProducts, setRefreshingProducts] = useState(false);
   const [productsLoaded, setProductsLoaded] = useState(false);
   const [error, setError] = useState('');
+  const accountRefreshFailedRef = useRef(false);
   const [purchaseFlow] = useState(() => createPurchaseFlow({
     isConsumable: () => false,
     confirmWithBackend: async (purchase) => {
@@ -43,8 +46,27 @@ export function AppleSubscriptions({ colors, onEntitlementUpdated }: Props) {
       if (!session) return { status: 'verification_delayed', retryAfterMs: 5000 };
       const transactionId = purchase.id;
       if (!transactionId) return { status: 'verification_delayed', retryAfterMs: 5000 };
-      await verifyAppleSubscription(session.token, { productId: purchase.productId, transactionId });
-      await refreshEntitlementRef.current();
+      const environmentIOS = purchase.store === 'apple' && 'environmentIOS' in purchase
+        ? purchase.environmentIOS ?? undefined
+        : undefined;
+      const signedTransaction = purchase.store === 'apple' && 'purchaseToken' in purchase
+        ? purchase.purchaseToken ?? undefined
+        : undefined;
+      await verifyAppleSubscription(session.token, {
+        productId: purchase.productId,
+        transactionId,
+        environmentIOS,
+        signedTransaction,
+      });
+      // The Gateway response is authoritative. A later account refresh can fail
+      // independently; don't leave a verified StoreKit purchase unfinished.
+      try {
+        await refreshEntitlementRef.current();
+        accountRefreshFailedRef.current = false;
+      } catch {
+        accountRefreshFailedRef.current = true;
+        setError('Your purchase is verified and your plan is active. Account details could not refresh yet; tap Restore to refresh them.');
+      }
       return { status: 'entitled', alreadyGranted: true };
     },
   }));
@@ -65,16 +87,31 @@ export function AppleSubscriptions({ colors, onEntitlementUpdated }: Props) {
 
   useEffect(() => () => purchaseFlow.dispose(), [purchaseFlow]);
 
+  // The account sheet's Reload button refreshes /balance and /me in its parent.
+  // Clear stale StoreKit warnings when that refresh confirms an active pass.
+  useEffect(() => {
+    if (accountRefreshRevision > 0 && accountActive) {
+      setError('');
+      setBusyProduct(null);
+      setRestoring(false);
+      accountRefreshFailedRef.current = false;
+    }
+  }, [accountActive, accountRefreshRevision]);
+
   const iap = useIAP({
     purchaseFlow,
     onPurchaseFlowOutcome: (outcome) => {
       if (outcome.status.status === 'entitled') {
         const wasUserPurchase = busyProduct === outcome.purchase.productId;
         setBusyProduct(null);
+        if (!accountRefreshFailedRef.current) setError('');
         if (wasUserPurchase) Alert.alert('Plan activated', 'Your App Store plan is active on your Expert AI account.');
       } else if (outcome.status.status === 'failed' || outcome.status.status === 'verification_delayed') {
         setBusyProduct(null);
-        setError('App Store verification is pending. Keep the app open or tap Restore to retry.');
+        const detail = outcome.status.status === 'failed' && outcome.status.error instanceof Error
+          ? ` Details: ${outcome.status.error.message}`
+          : '';
+        setError(`Apple has recorded the purchase, but Expert AI could not confirm account access yet. Your payment is not lost; tap Restore to retry.${detail}`);
       }
     },
     onPurchaseError: (purchaseError) => {
@@ -136,7 +173,9 @@ export function AppleSubscriptions({ colors, onEntitlementUpdated }: Props) {
       if (!session || cancelled) return;
       return verifyOwnedPurchases().then((outcomes) => {
         if (!cancelled && outcomes.some((outcome) => outcome.status === 'failed' || outcome.status === 'verification_delayed')) {
-          setError('A previous App Store purchase is still being verified. Tap Restore to retry.');
+          const failed = outcomes.find((outcome) => outcome.status === 'failed' || outcome.status === 'verification_delayed');
+          const detail = failed?.status === 'failed' && failed.error instanceof Error ? ` Details: ${failed.error.message}` : '';
+          setError(`An Apple purchase needs account verification. Your payment remains with Apple; tap Restore to retry.${detail}`);
         }
       });
     }).catch(() => {
@@ -172,6 +211,7 @@ export function AppleSubscriptions({ colors, onEntitlementUpdated }: Props) {
       return;
     }
     setBusyProduct(sku);
+    accountRefreshFailedRef.current = false;
     setError('');
     try {
       await requestPurchaseRef.current({ request: { apple: { sku } }, type: 'subs' });
@@ -188,21 +228,30 @@ export function AppleSubscriptions({ colors, onEntitlementUpdated }: Props) {
       return;
     }
     setRestoring(true);
+    accountRefreshFailedRef.current = false;
     setError('');
     try {
-      await restorePurchasesRef.current({ onlyIncludeActiveItemsIOS: true, alsoPublishToEventListenerIOS: true });
-      const outcomes = await verifyOwnedPurchases();
-      if (outcomes.some((outcome) => outcome.status === 'failed' || outcome.status === 'verification_delayed')) {
-        throw new Error('Some App Store transactions are still awaiting verification. Tap Restore again after a moment.');
+      // restorePurchases already runs purchaseFlow.recoverPurchases. Don't
+      // publish recovered transactions to the listener and manually verify
+      // the same StoreKit items a second time.
+      await restorePurchasesRef.current({ onlyIncludeActiveItemsIOS: true, alsoPublishToEventListenerIOS: false });
+      try {
+        await refreshAccount();
+      } catch {
+        setError('Apple purchases were checked, but Expert AI could not refresh your account details yet. Tap Reload to try again.');
+        Alert.alert('Purchases checked', 'The App Store restore finished, but your Expert AI account details could not be refreshed. Tap Reload to retry.');
+        return;
       }
-      await refreshAccount();
-      Alert.alert('Purchases restored', 'Your App Store subscriptions and account access have been refreshed.');
+      setError('');
+      Alert.alert('Purchases restored', 'Apple purchases were checked and your Expert AI account was refreshed.');
     } catch (e) {
-      showError(e instanceof Error ? e.message : 'Could not restore App Store purchases.');
+      const detail = e instanceof Error ? e.message : 'Could not restore App Store purchases.';
+      setError(`Restore could not finish. Your Apple purchase remains safe; tap Restore to retry.${detail ? ` Details: ${detail}` : ''}`);
+      Alert.alert('Restore needs another try', detail);
     } finally {
       setRestoring(false);
     }
-  }, [iap.connected, refreshAccount, showError, verifyOwnedPurchases]);
+  }, [iap.connected, refreshAccount]);
 
   if (Platform.OS !== 'ios') return null;
 

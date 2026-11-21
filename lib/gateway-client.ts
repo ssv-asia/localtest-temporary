@@ -177,9 +177,13 @@ export async function resilientFetch(
         const resp = await fetch(`${host}${path}`, { ...init, signal: ctl.signal });
         stickyHost = host; // this origin is reachable — prefer it next time
         lastGatewayRequestId = resp.headers.get('x-request-id');
-        // 5xx/429 from the edge: the origin resolved but can't serve right now —
-        // worth trying the other origin and then backing off.
-        if (resp.status === 502 || resp.status === 503 || resp.status === 504 || resp.status === 429) {
+        // A Worker can intentionally return a JSON 5xx when an upstream service
+        // reports a verification error. Don't retry an application response and
+        // throw away its detail; only retry edge/proxy failures.
+        const isStructuredApplicationError =
+          resp.headers.get('content-type')?.toLowerCase().includes('application/json') ?? false;
+        if ((resp.status === 502 || resp.status === 503 || resp.status === 504 || resp.status === 429)
+          && !isStructuredApplicationError) {
           lastErr = new Error(`Gateway ${resp.status}`);
           continue;
         }
@@ -690,14 +694,31 @@ export async function verifyGooglePlaySubscription(token: string, input: { produ
 
 // ---------------------------------------------------------------------------
 /** Verify an App Store transaction with Apple's server before finishing StoreKit. */
-export async function verifyAppleSubscription(token: string, input: { productId: string; transactionId: string; signedTransaction?: string }): Promise<void> {
+export async function verifyAppleSubscription(token: string, input: { productId: string; transactionId: string; environmentIOS?: string; signedTransaction?: string }): Promise<void> {
   const response = await resilientFetch('/billing/apple/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(input),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data?.ok) throw new Error(data?.error?.message || data?.error || 'App Store purchase could not be verified yet.');
+  if (!response.ok || !data?.ok) {
+    const error = data?.error;
+    const message = typeof error === 'string'
+      ? error
+      : typeof error?.message === 'string'
+        ? error.message
+        : 'App Store purchase could not be verified yet.';
+    const details = [
+      typeof error?.code === 'string' ? error.code : null,
+      typeof error?.appleRequestId === 'string' ? `Apple request ID ${error.appleRequestId}` : null,
+      typeof error?.gatewayRequestId === 'string'
+        ? `Request ID ${error.gatewayRequestId}`
+        : response.headers.get('x-request-id')
+          ? `Request ID ${response.headers.get('x-request-id')}`
+          : null,
+    ].filter(Boolean);
+    throw new Error(details.length ? `${message} (${details.join('; ')})` : message);
+  }
 }
 
 // Content reporting — Google Play's AI-Generated Content policy requires an

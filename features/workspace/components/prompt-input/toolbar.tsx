@@ -2,6 +2,7 @@ import { memo, useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Keyboard,
   NativeSyntheticEvent,
   Platform,
   Pressable,
@@ -309,7 +310,7 @@ function ToolbarComponent({
     return (
       <View style={styles.wrap}>
         <View style={[styles.toolbar, { backgroundColor: theme.toolbarBg, borderColor: theme.toolbarBorder }]}>
-          <Pressable onPress={() => { if (!isWideScreen) onOpenMobileSheet('model'); inputRef.current?.focus(); }} accessibilityRole="button" accessibilityLabel="Choose model" style={styles.button}>
+          <Pressable onPress={() => { Keyboard.dismiss(); if (!isWideScreen) onOpenMobileSheet('model'); }} accessibilityRole="button" accessibilityLabel="Choose model" style={styles.button}>
             <Text style={{ color: theme.textPrimary, fontFamily: Fonts.sansMedium, fontSize: 12 }}>Expert AI</Text>
             <ChevronDown size={12} color={theme.textMuted} />
           </Pressable>
@@ -330,7 +331,11 @@ function ToolbarComponent({
       >
         <View style={styles.popoverAnchor}>
           <Pressable
-            onPress={() => isWideScreen ? toggleDropdown('model') : onOpenMobileSheet('model')}
+            onPress={() => {
+              Keyboard.dismiss();
+              if (isWideScreen) toggleDropdown('model');
+              else onOpenMobileSheet('model');
+            }}
             disabled={toolbarDisabled}
             accessibilityRole="button"
             accessibilityLabel={`Model: ${currentModel?.name ?? 'Loading'}. Press to change.`}
@@ -434,7 +439,11 @@ function ToolbarComponent({
 
         <View style={styles.popoverAnchor}>
           <Pressable
-            onPress={() => isWideScreen ? toggleDropdown('effort') : onOpenMobileSheet('effort')}
+            onPress={() => {
+              Keyboard.dismiss();
+              if (isWideScreen) toggleDropdown('effort');
+              else onOpenMobileSheet('effort');
+            }}
             disabled={toolbarDisabled || modelThinkingLevels.length === 0}
             accessibilityRole="button"
             accessibilityLabel={`Thinking: ${thinkingLabel}. Press to change.`}
