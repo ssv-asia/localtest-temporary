@@ -159,7 +159,12 @@ class LowDataRenderer extends Renderer {
           paddingHorizontal: 4,
           paddingVertical: 2,
           borderRadius: 3,
-          color: 'inherit',
+          // React Native Text does not implement CSS's `inherit` keyword for
+          // the color prop. Leaving that value here falls back to black on iOS,
+          // which disappears against the Expert AI purple theme. Use the
+          // renderer's resolved theme color explicitly, like every other text
+          // node in the response.
+          color: this.textColor,
         }}
       >
         {code}

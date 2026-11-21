@@ -13,6 +13,7 @@ const localTestBundleId = 'com.local.expertai';
 const iosGoogleClientId = (localTestBuild
   ? process.env.EXPO_PUBLIC_GOOGLE_IOS_LOCALTEST_CLIENT_ID
   : process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID)?.trim();
+const githubClientId = process.env.EXPO_PUBLIC_GITHUB_CLIENT_ID?.trim();
 const iosBundleId = localTestBuild ? localTestBundleId : publicBundleId;
 // Expo Notifications defaults aps-environment to development, which cannot
 // request production APNs tokens for App Store builds.
@@ -29,6 +30,9 @@ if (productionBuild && isIosBuild && apsEnvironment !== 'production') {
 }
 if (productionBuild && isIosBuild && !iosGoogleClientId) {
   throw new Error('EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID is required for production iOS builds so the configured Google sign-in option is present.');
+}
+if (productionBuild && isIosBuild && !githubClientId) {
+  throw new Error('EXPO_PUBLIC_GITHUB_CLIENT_ID is required for production iOS builds so GitHub device authorization is configured.');
 }
 const plugins = (config.plugins ?? []).filter((plugin) =>
   (Array.isArray(plugin) ? plugin[0] : plugin) !== googlePlugin,
@@ -66,6 +70,7 @@ module.exports = {
   extra: {
     ...config.extra,
     googleIosClientId: iosGoogleClientId || undefined,
+    githubClientId: githubClientId || undefined,
   },
   plugins,
 };

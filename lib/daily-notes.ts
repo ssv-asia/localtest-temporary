@@ -152,6 +152,16 @@ export async function getDailyNote(id: string): Promise<DailyNote | null> {
   return all.find((n) => n.id === id) ?? null;
 }
 
+/** Bypass the in-memory cache when an app tool needs to prove a stored result. */
+async function getPersistedDailyNote(id: string): Promise<DailyNote | null> {
+  await writeChain;
+  const raw = Platform.OS === 'web' ? localStorage.getItem(STORAGE_KEY) : await readRaw();
+  if (raw == null) return null;
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) throw new Error('Invalid daily-notes snapshot');
+  return (parsed as DailyNote[]).find((note) => note.id === id) ?? null;
+}
+
 /** Today's note, creating it (with carry-forward of yesterday's unchecked Focus
  *  items) the first time it's opened on a new local day. */
 export async function getOrCreateTodayNote(): Promise<DailyNote> {
@@ -256,8 +266,14 @@ export async function executeDailyNoteTool(args: Record<string, unknown>): Promi
     return { error: true, message: 'Choose a real calendar date in YYYY-MM-DD format.' };
   }
   if (action === 'read') {
-    const note = await getDailyNote(id);
-    return note ? { ok: true, date: id, title: note.title, body: note.body } : { ok: true, date: id, exists: false };
+    try {
+      const note = await getPersistedDailyNote(id);
+      return note
+        ? { ok: true, date: id, title: note.title, body: note.body, readbackVerified: true }
+        : { ok: true, date: id, exists: false, readbackVerified: true };
+    } catch {
+      return { error: true, code: 'readback_failed', date: id, message: 'The stored daily note could not be read back.' };
+    }
   }
   if (action === 'create') {
     const existed = await getDailyNote(id);
@@ -269,14 +285,24 @@ export async function executeDailyNoteTool(args: Record<string, unknown>): Promi
   }
   const content = args.content.trim();
   if (action === 'append') {
-    await appendToDailyNote(id, content);
-    const note = await getDailyNote(id);
-    return { ok: true, date: id, title: note?.title || dailyNoteTitle(id), body: note?.body || '' };
+    try {
+      await appendToDailyNote(id, content);
+      const note = await getPersistedDailyNote(id);
+      if (!note || !note.body.includes(content)) return { error: true, code: 'write_readback_mismatch', date: id, message: 'The saved daily note did not contain the requested text after a fresh storage read.' };
+      return { ok: true, date: id, title: note.title, body: note.body, readbackVerified: true };
+    } catch {
+      return { error: true, code: 'write_or_readback_failed', date: id, message: 'The daily note could not be saved and verified.' };
+    }
   }
   if (action === 'replace') {
-    await saveDailyNoteBody(id, content);
-    const note = await getDailyNote(id);
-    return { ok: true, date: id, title: note?.title || dailyNoteTitle(id), body: note?.body || content };
+    try {
+      await saveDailyNoteBody(id, content);
+      const note = await getPersistedDailyNote(id);
+      if (!note || note.body !== content) return { error: true, code: 'write_readback_mismatch', date: id, message: 'The stored daily note did not match the replacement text after a fresh storage read.' };
+      return { ok: true, date: id, title: note.title, body: note.body, readbackVerified: true };
+    } catch {
+      return { error: true, code: 'write_or_readback_failed', date: id, message: 'The daily note could not be saved and verified.' };
+    }
   }
   return { error: true, message: `Unsupported daily-note action: ${action}` };
 }

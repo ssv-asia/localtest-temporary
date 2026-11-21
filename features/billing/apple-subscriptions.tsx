@@ -151,7 +151,11 @@ export function AppleSubscriptions({ colors, onEntitlementUpdated }: Props) {
   const selectedSku = APPLE_SUBSCRIPTION_IDS[selected][period];
   const selectedProduct = productById.get(selectedSku);
   const accent = planColors[selected] ?? colors.accent;
-  const foregroundOnAccent = colors.onTint ?? '#FFFFFF';
+  // Each plan uses its own light tier color as the purchase button fill.
+  // `colors.onTint` belongs to the app theme accent (gold in Expert AI purple),
+  // so reusing it here produced low-contrast gold-on-pastel text.
+  const foregroundOnAccent = '#211A32';
+  const planApps = ['iOS', ...selectedPlan.apps.filter((app) => app !== 'iOS')];
 
   const startPurchase = useCallback(async (sku: string) => {
     if (!iap.connected) {
@@ -241,11 +245,11 @@ export function AppleSubscriptions({ colors, onEntitlementUpdated }: Props) {
         <Text style={[styles.detailText, { color: colors.textSecondary }]}>
           {period === 'monthly' ? 'Monthly' : 'Weekly'} · {selectedProduct?.displayPrice ?? (productsLoaded ? 'Price unavailable for this storefront' : 'Checking App Store price…')} per {period === 'monthly' ? 'month' : 'week'}
         </Text>
-        <Text style={[styles.planMessage, { color: colors.textSecondary }]}>{selected === 11 ? 'Everyday AI help for questions, research, and daily work.' : selectedPlan.message}</Text>
+        <Text style={[styles.planMessage, { color: colors.textSecondary }]}>{selected === 11 ? 'Everyday AI help for questions, research, and daily work on iOS and Android.' : selectedPlan.message}</Text>
         <View style={styles.benefits}>
-          {planFeatureLines(selectedPlan, period).map((line) => <Text key={line} style={[styles.benefit, { color: colors.textSecondary }]}>✓  {line}</Text>)}
+          {planFeatureLines(selectedPlan, period).filter((line) => !line.startsWith('Works with ')).map((line) => <Text key={line} style={[styles.benefit, { color: colors.textSecondary }]}>✓  {line}</Text>)}
         </View>
-        <Text style={[styles.apps, { color: colors.textTertiary }]}>Works with {selectedPlan.apps.join(' · ')}</Text>
+        <Text style={[styles.apps, { color: colors.textTertiary }]}>Works with {planApps.join(' · ')}</Text>
       </View>
 
       {!iap.connected ? (

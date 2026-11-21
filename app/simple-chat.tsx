@@ -311,39 +311,44 @@ function currentStyleOpts(messageText: string = '') {
  *  the chat bubble a second time when it's already shown, editable, in the
  *  document card above. Returns null when there's nothing to do, so the
  *  caller can leave the message text untouched (the common case). */
-function maybeApplyDocumentEdit(
+async function maybeApplyDocumentEdit(
   replyText: string,
-  targetDoc: { archiveId: string; path: string } | null,
+  targetDoc: { archiveId: string; repoFullName: string; path: string } | null,
   userRequest = '',
-): string | null {
-  const requestedEdit = DOCUMENT_INTENT_RE.test(userRequest);
+): Promise<string | null> {
+  const explicitDocCommand = /^\/doc\b/i.test(userRequest.trim());
+  const requestedEdit = explicitDocCommand || DOCUMENT_INTENT_RE.test(userRequest);
   if (!targetDoc) {
-    return null;
+    return explicitDocCommand ? '⚠️ No archive document was open for this /doc request. Nothing was changed.' : null;
   }
   const doc = useDocumentChatStore.getState().activeDocument;
   // Guard against the document being closed or swapped for a different file
   // while this reply was still streaming (a multi-second round trip) — apply
   // the edit only if it's still the same file the user was looking at when
   // they sent the message, never whatever happens to be open now.
-  if (!doc || doc.archiveId !== targetDoc.archiveId || doc.path !== targetDoc.path) {
+  if (!doc || doc.archiveId !== targetDoc.archiveId || doc.repoFullName !== targetDoc.repoFullName || doc.path !== targetDoc.path) {
     return requestedEdit
-      ? `${replyText.trim()}\n\n⚠️ The open file changed while I was preparing that edit, so I left the current file untouched. Reopen the intended file and try again.`
+      ? '⚠️ The archive document was closed or changed while this reply was being generated. Nothing was applied to the current document.'
       : replyText;
   }
   const plan = parseDocumentEditPlan(replyText);
   if (plan) {
     const applied = applyDocumentEditPlan(doc.content, plan);
     if (!applied) return replyText.replace(/```(?:patchjson|document-patch)\s*\r?\n[\s\S]*?\r?\n```/i, '⚠️ I could not apply that edit safely: an anchor was missing, ambiguous, or overlapped another edit. The document was not changed. Please retry with smaller edits using distinct exact text.').trim();
-    useDocumentChatStore.getState().updateContent(applied.content);
-    return patchBlockForReply(replyText, plan.summary || `Applied ${applied.applied} targeted edit${applied.applied === 1 ? '' : 's'}`);
+    const persisted = await useDocumentChatStore.getState().updateContentAndVerify(applied.content, targetDoc);
+    if (!persisted) return replyText.replace(/```(?:patchjson|document-patch)\s*\r?\n[\s\S]*?\r?\n```/i, `⚠️ The edit is visible in ${targetDoc.path}, but I could not verify that this device saved it. Review the document and keep the app open until storage is available.`).trim();
+    return patchBlockForReply(replyText, plan.summary || `Updated ${targetDoc.path}; local storage reread verified ${applied.applied} targeted edit${applied.applied === 1 ? '' : 's'}`);
   }
   // Backward-compatible fallback for older sessions/models that still return
   // the previous full-document contract. New turns are explicitly patch-only.
   const match = replyText.match(/```document\r?\n([\s\S]*?)\r?\n```\s*$/m);
-  if (!match) return requestedEdit
+  if (!match) return explicitDocCommand
+    ? '⚠️ I did not change the open archive document because no valid targeted patch was returned.'
+    : requestedEdit
     ? `${replyText.trim()}\n\n⚠️ I didn’t change the open file because the edit plan was missing or invalid. Please try again with a smaller, specific change.`
     : null;
-  useDocumentChatStore.getState().updateContent(match[1]);
+  const persisted = await useDocumentChatStore.getState().updateContentAndVerify(match[1], targetDoc);
+  if (!persisted) return '⚠️ The document update could not be verified in local storage. Review the open document before closing the app.';
   return replyText.replace(match[0], '📄 Document updated above — review it, then tap Commit to save it to GitHub.').trim();
 }
 
@@ -2788,7 +2793,7 @@ export default function SimpleChatScreen() {
       const lastUserText = typeof lastUserMessage?.content === 'string' ? lastUserMessage.content : '';
       const docAtSendTime = useDocumentChatStore.getState().activeDocument;
       const targetDocForEdit = docAtSendTime && currentStyleOpts(lastUserText).document
-        ? { archiveId: docAtSendTime.archiveId, path: docAtSendTime.path }
+        ? { archiveId: docAtSendTime.archiveId, repoFullName: docAtSendTime.repoFullName, path: docAtSendTime.path }
         : null;
       const hasAnswerContent = () => fullText
         .replace(/^⚠️ AEC Knowledge isn't connected — reconnect it in Settings\. Answering from general knowledge instead\.\s*/u, '')
@@ -2934,7 +2939,7 @@ export default function SimpleChatScreen() {
                 runtime.raf = requestAnimationFrame(() => flushPending(assistantId));
               }
             },
-            onDone: () => {
+            onDone: async () => {
               if (turnGenerationRef.current.get(assistantId) !== generation) return;
               // Some fetch/SSE implementations can deliver a late error after
               // the terminal event (especially when the app is backgrounded).
@@ -2958,7 +2963,7 @@ export default function SimpleChatScreen() {
               });
               const completedTimer = retryTimersRef.current.get(assistantId);
               if (completedTimer) { clearTimeout(completedTimer); retryTimersRef.current.delete(assistantId); }
-              const documentDisplayText = maybeApplyDocumentEdit(fullText, targetDocForEdit, lastUserText);
+              const documentDisplayText = await maybeApplyDocumentEdit(fullText, targetDocForEdit, lastUserText);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
@@ -3043,7 +3048,7 @@ export default function SimpleChatScreen() {
                     try {
                       result = await executeDailyNoteTool(args);
                       if (Platform.OS === 'ios' && (turnGenerationRef.current.get(assistantId) !== generation || runtime.controller.signal.aborted)) return null;
-                      if (Platform.OS === 'ios' && !result?.error && result?.ok) {
+                      if (Platform.OS === 'ios' && !result?.error && result?.ok && result?.readbackVerified === true) {
                         const refreshedNotes = await listDailyNotes();
                         setDailyNotesList(refreshedNotes);
                         setDailyStreak(computeStreak(refreshedNotes));
@@ -6580,7 +6585,9 @@ export default function SimpleChatScreen() {
         style={[
           styles.inputRow,
           {
-            paddingBottom: isKeyboardVisible ? 10 : insets.bottom + 10,
+            paddingBottom: isKeyboardVisible
+              ? (Platform.OS === 'ios' ? 0 : 10)
+              : insets.bottom + 10,
             borderTopColor: colors.border,
             backgroundColor: colors.background,
           },

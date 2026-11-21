@@ -14,6 +14,7 @@ jobs:
       APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
       APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 1093163336745-1m9gq2ka957532pd75mr339kltu8muop.apps.googleusercontent.com
+      EXPO_PUBLIC_GITHUB_CLIENT_ID: ${{ vars.EXPO_PUBLIC_GITHUB_CLIENT_ID }}
       EXPERT_AI_APS_ENVIRONMENT: production
       EAS_BUILD_PROFILE: production
       SENTRY_DISABLE_AUTO_UPLOAD: "true"
@@ -31,6 +32,7 @@ jobs:
           test -n "$APPLE_TEAM_ID"
           test -n "$APP_STORE_CONNECT_KEY_ID"
           test -n "$APP_STORE_CONNECT_ISSUER_ID"
+          test -n "$EXPO_PUBLIC_GITHUB_CLIENT_ID"
           [[ "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]
 
       - name: Verify current App Store toolchain
@@ -56,6 +58,7 @@ jobs:
           const config = JSON.parse(execFileSync('npx', ['expo', 'config', '--type', 'public', '--json'], { encoding: 'utf8' }));
           if (config.ios?.bundleIdentifier !== 'com.ssvasia.expertai') throw new Error('Production app bundle ID is incorrect.');
           if (config.extra?.googleIosClientId !== process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) throw new Error('Production Google OAuth client was not configured.');
+          if (config.extra?.githubClientId !== process.env.EXPO_PUBLIC_GITHUB_CLIENT_ID) throw new Error('Production GitHub OAuth client was not configured.');
           const project = fs.readFileSync('ios/ExpertAI.xcodeproj/project.pbxproj', 'utf8');
           if (!project.includes('com.ssvasia.expertai.share-extension')) throw new Error('Production Share Extension ID is missing.');
           if (project.includes('com.local.expertai')) throw new Error('Local-test bundle ID leaked into the production project.');

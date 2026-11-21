@@ -99,6 +99,7 @@ interface DocumentChatState {
   hydrate: () => Promise<void>;
   open: (doc: ActiveDocument) => void;
   updateContent: (content: string) => void;
+  updateContentAndVerify: (content: string, target: Pick<ActiveDocument, 'archiveId' | 'repoFullName' | 'path'>) => Promise<boolean>;
   /** Called after a successful commit — the new sha becomes current and the
    *  dirty comparison resets. */
   markCommitted: (sha: string, content: string, identity: Pick<ActiveDocument, 'archiveId' | 'repoFullName' | 'path'>) => void;
@@ -164,6 +165,25 @@ export const useDocumentChatStore = create<DocumentChatState>((set, get) => {
       const updated = { ...current, content };
       set({ activeDocument: updated, persistenceError: null });
       scheduleWrite(updated, persist);
+    },
+    updateContentAndVerify: async (content, target) => {
+      const current = get().activeDocument;
+      if (!current || current.archiveId !== target.archiveId
+        || current.repoFullName !== target.repoFullName || current.path !== target.path) return false;
+      documentMutationRevision += 1;
+      const updated = { ...current, content };
+      set({ activeDocument: updated, persistenceError: null });
+      if (writeTimer) { clearTimeout(writeTimer); writeTimer = null; }
+      try {
+        await persist(updated);
+        const stored = await readPersisted();
+        return stored?.archiveId === target.archiveId
+          && stored.repoFullName === target.repoFullName
+          && stored.path === target.path
+          && stored.content === content;
+      } catch {
+        return false;
+      }
     },
     markCommitted: (sha, content, identity) => {
       const current = get().activeDocument;
