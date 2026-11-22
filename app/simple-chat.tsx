@@ -7,6 +7,7 @@ import {
   AppState,
   Easing,
   Keyboard,
+  KeyboardAvoidingView,
   FlatList,
   Modal,
   Platform,
@@ -1118,18 +1119,16 @@ export default function SimpleChatScreen() {
     router.push('/(app)/servers');
   }, [router]);
 
-  // Use the validated APK keyboard contract on both platforms: explicit show
-  // and hide events with one safe-area adjustment. iOS keyboard frame screen
-  // coordinates must not be mixed with the app window height.
+  // The iOS screen uses KeyboardAvoidingView below, which measures the actual
+  // keyboard frame against this screen. Keep this JS offset only for Android,
+  // where the APK's edge-to-edge window does not resize for the IME.
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const keyboardPadding = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const showSub = Keyboard.addListener(showEvent, (event) => {
-      const height = Platform.OS === 'ios'
-        ? event.endCoordinates.height - insets.bottom
-        : event.endCoordinates.height + insets.bottom;
+      const height = Platform.OS === 'ios' ? 0 : event.endCoordinates.height + insets.bottom;
       setIsKeyboardVisible(true);
       keyboardPadding.stopAnimation();
       Animated.timing(keyboardPadding, {
@@ -5789,12 +5788,18 @@ export default function SimpleChatScreen() {
     || currentConversationHasRetryTimer;
 
   return (
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior="padding"
+      enabled={Platform.OS === 'ios'}
+      keyboardVerticalOffset={0}
+    >
     <Animated.View
       style={[
         styles.container,
         {
           backgroundColor: colors.background,
-          paddingBottom: keyboardPadding,
+          paddingBottom: Platform.OS === 'ios' ? 0 : keyboardPadding,
         },
       ]}
     >
@@ -6576,7 +6581,7 @@ export default function SimpleChatScreen() {
           {
             paddingBottom: isKeyboardVisible
               ? (Platform.OS === 'ios' ? 0 : 10)
-              : insets.bottom + 10,
+              : (Platform.OS === 'ios' ? insets.bottom : insets.bottom + 10),
             borderTopColor: colors.border,
             backgroundColor: colors.background,
           },
@@ -8394,7 +8399,8 @@ export default function SimpleChatScreen() {
           }}
         />
       ) : null}
-      </Animated.View>
+    </Animated.View>
+    </KeyboardAvoidingView>
   );
 }
 

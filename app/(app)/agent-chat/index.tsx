@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Image,
   StyleSheet,
   Text,
@@ -31,6 +34,8 @@ export default function AgentChatScreen() {
   const themeState = useThemeStore.getState();
   const colors = agentThemeColors(themeState.getColors(), themeState.settings.preset);
   const keyboardPadding = useAgentKeyboardPadding();
+  const screenRef = useRef<View>(null);
+  const [keyboardVerticalOffset, setKeyboardVerticalOffset] = useState(0);
   const router = useRouter();
   const { draft } = useLocalSearchParams<{ draft?: string }>();
   const client = usePiClient();
@@ -150,20 +155,31 @@ export default function AgentChatScreen() {
   const clearAlert = useCallback(() => setAlertMessage(null), []);
 
   const editorBg = colors.background;
-  // Edge-to-edge keyboard handling: under app.json `edgeToEdgeEnabled: true`, Android
-  // does NOT resize the window for the IME, so we lift the composer by the keyboard's
-  // real height ourselves. See simple-chat.tsx for the full explanation.
+  // Android keeps its APK-tested explicit IME offset. iOS uses the measured
+  // KeyboardAvoidingView below so the composer follows the actual keyboard frame.
 
   return (
-    <Animated.View style={[styles.container, { backgroundColor: colors.background, paddingBottom: keyboardPadding }]}>
-      <View style={[styles.editorColumn, { backgroundColor: editorBg }]}>
+    <Animated.View
+      ref={screenRef}
+      onLayout={() => screenRef.current?.measureInWindow((_x, y) => setKeyboardVerticalOffset(y))}
+      style={[styles.container, { backgroundColor: colors.background, paddingBottom: keyboardPadding }]}
+    >
+      <KeyboardAvoidingView
+        style={[styles.editorColumn, { backgroundColor: editorBg }]}
+        behavior="padding"
+        enabled={Platform.OS === 'ios'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardVerticalOffset : 0}
+      >
         {sending ? (
           <View style={styles.sendingContainer}>
             <ActivityIndicator size="small" color={colors.accent} />
             <Text style={[styles.sendingText, { color: colors.textSecondary }]}>Connecting to your computer…</Text>
           </View>
         ) : (
-          <View style={styles.hero}>
+          <View
+            style={styles.hero}
+            onTouchEnd={Platform.OS === 'ios' ? Keyboard.dismiss : undefined}
+          >
             <Image source={require('@/assets/images/expert-ai-owl-transparent.png')} style={styles.heroMark} resizeMode="contain" accessibilityLabel="Expert AI owl" />
             <Text style={[styles.eyebrow, { color: colors.accent }]}>EXPERT AI AGENT</Text>
             <Text style={[styles.heroTitle, { color: colors.text }]}>What should your computer do?</Text>
@@ -190,7 +206,7 @@ export default function AgentChatScreen() {
             ensureSession().catch((e) => console.warn('[Agent Chat] Prewarm session error:', e));
           }}
         />
-      </View>
+      </KeyboardAvoidingView>
     </Animated.View>
   );
 }

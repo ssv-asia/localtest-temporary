@@ -2,6 +2,7 @@
 import {
   ActivityIndicator,
   Animated,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
@@ -36,6 +37,8 @@ export default function ChatSessionScreen() {
   const colors = useThemeStore.getState().getColors();
   const isDark = useThemeStore.getState().settings.preset !== 'light';
   const keyboardPadding = useAgentKeyboardPadding();
+  const screenRef = useRef<View>(null);
+  const [keyboardVerticalOffset, setKeyboardVerticalOffset] = useState(0);
 
   const selectSession = useChatStore((s) => s.selectSession);
   const registerSessionWorkspace = useWorkspaceStore((s) => s.registerSessionWorkspace);
@@ -152,9 +155,16 @@ export default function ChatSessionScreen() {
     <DiffPanelProvider messages={session.messages as any[]}>
     <MobileDiffSheetProvider>
     <Animated.View
+      ref={screenRef}
+      onLayout={() => screenRef.current?.measureInWindow((_x, y) => setKeyboardVerticalOffset(y))}
       style={[styles.container, { backgroundColor: colors.background, paddingBottom: keyboardPadding }]}
     >
-      <View style={[styles.editorColumn, { backgroundColor: editorBg }]}>
+      <KeyboardAvoidingView
+        style={[styles.editorColumn, { backgroundColor: editorBg }]}
+        behavior="padding"
+        enabled={Platform.OS === 'ios'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardVerticalOffset : 0}
+      >
         {inputBlocked && (
           <View style={[styles.connectionNotice, { backgroundColor: colors.errorBackground, borderColor: colors.border }]}>
             <Text style={[styles.connectionText, { color: colors.errorColor }]}>Connection to your computer was interrupted. Reconnecting…</Text>
@@ -213,7 +223,7 @@ export default function ChatSessionScreen() {
           errorMessage={alertMessage}
           onClearError={clearAlert}
         />
-      </View>
+      </KeyboardAvoidingView>
     </Animated.View>
     </MobileDiffSheetProvider>
     </DiffPanelProvider>

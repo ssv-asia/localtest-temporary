@@ -2,12 +2,10 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, Keyboard, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// Agent screens use the same edge-to-edge IME offset as Simple Chat. Android's
-// adjustNothing window mode leaves the composer under the keyboard otherwise.
+// Android's edge-to-edge window does not resize for the IME, so keep the
+// APK-tested explicit offset there. iOS uses KeyboardAvoidingView in the route.
 export function useAgentKeyboardPadding() {
   const insets = useSafeAreaInsets();
-  // On iOS the PromptInput owns its resting safe-area spacing. Starting the
-  // parent at the same inset duplicated that space and left a visible gap.
   const padding = useRef(new Animated.Value(Platform.OS === 'ios' ? 0 : insets.bottom)).current;
 
   useEffect(() => {
@@ -17,17 +15,20 @@ export function useAgentKeyboardPadding() {
       padding.setValue(0);
       return;
     }
-    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', (event) => {
-      const height = Platform.OS === 'ios'
-        ? event.endCoordinates.height - insets.bottom
-        : event.endCoordinates.height + insets.bottom;
+    if (Platform.OS === 'ios') {
+      padding.setValue(0);
+      return;
+    }
+    const updateKeyboardFrame = (event: { endCoordinates: { height: number } }) => {
+      const height = event.endCoordinates.height + insets.bottom;
       padding.stopAnimation();
       Animated.timing(padding, {
         toValue: Math.max(0, height), duration: 180, easing: Easing.out(Easing.cubic),
         isInteraction: false, useNativeDriver: false,
       }).start();
-    });
-    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => {
+    };
+    const show = Keyboard.addListener('keyboardDidShow', updateKeyboardFrame);
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
       padding.stopAnimation();
       Animated.timing(padding, {
         toValue: Platform.OS === 'ios' ? 0 : insets.bottom, duration: 160, easing: Easing.out(Easing.cubic),

@@ -13,7 +13,7 @@ import {
   TextInputKeyPressEventData,
   View,
 } from "react-native";
-import { Plus, ArrowUp, Mic, Square, FolderOpen } from "lucide-react-native";
+import { Plus, ArrowUp, Mic, Square, FolderOpen, ChevronDown } from "lucide-react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { useQuery } from "@tanstack/react-query";
 
@@ -477,10 +477,10 @@ export function PromptInput({
         {
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
-          // Match the safe-area amount removed by the parent keyboard offset;
-          // a fixed 24pt left the composer misaligned on some iPhone sizes.
+          // KeyboardAvoidingView owns the iOS keyboard offset; keep only the
+          // resting home-indicator inset when the keyboard is closed.
           paddingBottom: Platform.OS === "ios"
-            ? keyboardVisible ? insets.bottom : Math.max(12, insets.bottom)
+            ? keyboardVisible ? 0 : Math.max(12, insets.bottom - 8)
             : keyboardVisible && !isWideScreen ? 24 : 12,
         },
       ]}
@@ -604,6 +604,17 @@ export function PromptInput({
           >
             <FolderOpen size={17} color={theme.textMuted} strokeWidth={1.8} />
           </Pressable>
+          {Platform.OS === "ios" && keyboardVisible && (
+            <Pressable
+              style={styles.attachButton}
+              onPress={() => Keyboard.dismiss()}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss keyboard"
+              hitSlop={6}
+            >
+              <ChevronDown size={18} color={theme.textMuted} strokeWidth={1.8} />
+            </Pressable>
+          )}
           {isListening ? (
             <Pressable style={styles.micWaveRow} onPress={handleMicPress} accessibilityRole="button" accessibilityLabel="Stop recording">
               <Square size={12} color="#EF4444" strokeWidth={2} fill="#EF4444" />
