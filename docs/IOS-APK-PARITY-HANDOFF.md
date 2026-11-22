@@ -36,12 +36,17 @@ now follows that behavior instead of the unsupported attempt.
 Commit `12bf36a` is pushed to `main`. TypeScript and targeted ESLint pass; the
 only lint output is the pre-existing BOM warning in two files. Signed App Store
 workflow run [44968254759](https://github.com/ssv-asia/localtest-temporary/actions/runs/44968254759)
-is building at the time of this note. Do not treat the keyboard as device-
-verified or release-certified from source checks or CI alone. After Apple
-processing, install build 7 and verify: QuickType visible/hidden, send control
-fully clear of keyboard, compact resting gap/home-indicator clearance, Agent
-Chat dismiss button and hero tap, message-area drag dismissal, model picker
-access after dismiss, archived-document composer, and iPad/rotation layouts.
+passed its archive, signing, export, package validation, and artifact upload.
+The exact signed IPA was uploaded by run
+[44970195597](https://github.com/ssv-asia/localtest-temporary/actions/runs/44970195597);
+Apple returned `UPLOAD SUCCEEDED` with zero warnings (delivery UUID
+`e592bd3f-9dba-408e-99ba-5ee126e25a7d`). Build 7 is awaiting Apple processing.
+Do not treat the keyboard as device-verified or release-certified from source
+checks, CI, or upload alone. After Apple processing, install build 7 and verify:
+QuickType visible/hidden, send control fully clear of keyboard, compact resting
+gap/home-indicator clearance, Agent Chat dismiss button and hero tap, message-
+area drag dismissal, model picker access after dismiss, archived-document
+composer, and iPad/rotation layouts.
 
 Platform references used for the implementation: React Native
 [KeyboardAvoidingView](https://reactnative.dev/docs/keyboardavoidingview),

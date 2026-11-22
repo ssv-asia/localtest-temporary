@@ -18,12 +18,17 @@
   `git diff --check` (with the repository's CRLF handling) passed. ESLint reports
   only existing BOM warnings. Commit is pushed to `main`; App Store build number
   is `1.5.3 (7)`.
-- GitHub signed IPA workflow run
+- Signed IPA workflow run
   [44968254759](https://github.com/ssv-asia/localtest-temporary/actions/runs/44968254759)
-  is in progress at the time of this note. Upload to App Store Connect and
-  Apple's processing are pending. Physical iPhone verification is required
-  before calling the keyboard fix confirmed or submitting this candidate for
-  public App Review. See `IOS-APK-PARITY-HANDOFF.md` for the device checklist.
+  passed archive, signing, export, validation, and artifact upload. The exact
+  IPA upload workflow run
+  [44970195597](https://github.com/ssv-asia/localtest-temporary/actions/runs/44970195597)
+  returned `UPLOAD SUCCEEDED` with zero warnings (delivery UUID
+  `e592bd3f-9dba-408e-99ba-5ee126e25a7d`). Apple processing is pending; install
+  it from TestFlight after processing completes. Physical iPhone verification
+  is required before calling the keyboard fix confirmed or submitting this
+  candidate for public App Review. See `IOS-APK-PARITY-HANDOFF.md` for the
+  device checklist.
 
 > **Current-state update:** Older checklist entries in this file are a dated
 > activity log and are superseded by the “Current release candidate audit” at
