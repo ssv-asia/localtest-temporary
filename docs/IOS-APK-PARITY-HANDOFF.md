@@ -1,5 +1,54 @@
 # Expert AI iOS / APK parity handoff
 
+## iOS keyboard follow-up — 22 November 2026
+
+The owner reported that build 6 still left excess space below the composer and
+the iOS QuickType suggestion row covered the composer/send control. Agent Chat
+also lacked a dependable keyboard-dismiss action on the conversation screen.
+
+The concrete source issue was split keyboard-layout ownership: the chat screens
+manually converted keyboard `height` into root bottom padding by subtracting the
+safe-area inset, while the composer also applied its own bottom inset. That
+assumes a fixed keyboard height and does not calculate overlap from the screen
+position of the keyboard. Agent Chat is nested beneath app headers, so a fixed
+vertical offset is also incorrect there. Its message list already requests
+tap-to-dismiss and interactive drag dismissal, but the new-chat hero had no
+dismiss action and the composer had no explicit keyboard control. The source
+alone does not explain why the owner still saw taps fail on the conversation
+screen; the down-chevron provides a deterministic control there.
+
+Build 7 (`1.5.3 (7)`) replaces iOS keyboard displacement with React Native's
+`KeyboardAvoidingView` using `behavior="padding"`. Simple Chat uses the screen
+root; Agent Chat uses a route-level view whose vertical offset is measured from
+its actual on-screen position under the headers. The composer drops its extra
+bottom inset while the keyboard is visible and uses a smaller resting inset.
+Agent Chat now provides an accessible down-chevron keyboard-dismiss button; the
+new-chat hero also dismisses on tap. Android retains the APK-tested explicit
+keyboard offset and was not given a new keyboard algorithm.
+
+An earlier uncommitted attempt in this session added
+`keyboardWillChangeFrame` handling and guessed at iOS keyboard height. It was
+removed before commit. React Native 0.81's own `KeyboardAvoidingView` source
+listens to `keyboardWillShow` / `keyboardWillHide` on iOS and explains that
+floating or split keyboards can emit frame-change before hide; the implementation
+now follows that behavior instead of the unsupported attempt.
+
+Commit `12bf36a` is pushed to `main`. TypeScript and targeted ESLint pass; the
+only lint output is the pre-existing BOM warning in two files. Signed App Store
+workflow run [44968254759](https://github.com/ssv-asia/localtest-temporary/actions/runs/44968254759)
+is building at the time of this note. Do not treat the keyboard as device-
+verified or release-certified from source checks or CI alone. After Apple
+processing, install build 7 and verify: QuickType visible/hidden, send control
+fully clear of keyboard, compact resting gap/home-indicator clearance, Agent
+Chat dismiss button and hero tap, message-area drag dismissal, model picker
+access after dismiss, archived-document composer, and iPad/rotation layouts.
+
+Platform references used for the implementation: React Native
+[KeyboardAvoidingView](https://reactnative.dev/docs/keyboardavoidingview),
+[Keyboard](https://reactnative.dev/docs/keyboard), and
+[ScrollView keyboard behavior](https://reactnative.dev/docs/scrollview); Expo's
+[keyboard handling guide](https://docs.expo.dev/guides/keyboard-handling/).
+
 ## Keyboard fix follow-up — 22 November 2026
 
 The owner confirmed the uploaded iOS build 5 still has keyboard/composer

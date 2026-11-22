@@ -1,5 +1,30 @@
 # iOS App Store build status — 20 November 2026
 
+## Keyboard follow-up build 7 — 22 November 2026
+
+- Build 6's keyboard layout was still reported as visually incorrect on iPhone:
+  too much idle bottom spacing and QuickType overlapping the composer/send
+  control. Agent Chat also needed a direct way to dismiss the keyboard.
+- The iOS source used manual keyboard-height minus safe-area arithmetic while
+  the composer separately added safe-area padding. Agent routes are nested below
+  headers, so their keyboard overlap also needs a measured screen offset.
+- Commit `12bf36a` replaces the iOS layout calculation with React Native
+  `KeyboardAvoidingView` (`padding` behavior); Agent Chat measures its route
+  position for `keyboardVerticalOffset`. The composer removes its bottom inset
+  while the keyboard is open, reduces its resting inset, and Agent Chat adds an
+  accessible dismiss button. The Android keyboard path remains the APK-tested
+  explicit offset.
+- Validation before native build: `yarn tsc --noEmit`, targeted ESLint, and
+  `git diff --check` (with the repository's CRLF handling) passed. ESLint reports
+  only existing BOM warnings. Commit is pushed to `main`; App Store build number
+  is `1.5.3 (7)`.
+- GitHub signed IPA workflow run
+  [44968254759](https://github.com/ssv-asia/localtest-temporary/actions/runs/44968254759)
+  is in progress at the time of this note. Upload to App Store Connect and
+  Apple's processing are pending. Physical iPhone verification is required
+  before calling the keyboard fix confirmed or submitting this candidate for
+  public App Review. See `IOS-APK-PARITY-HANDOFF.md` for the device checklist.
+
 > **Current-state update:** Older checklist entries in this file are a dated
 > activity log and are superseded by the “Current release candidate audit” at
 > the end. The live target is `ssv-asia/localtest-temporary` at
