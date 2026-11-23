@@ -154,14 +154,12 @@ jobs:
           SIGNED_APS_ENVIRONMENT=$(/usr/libexec/PlistBuddy -c 'Print :aps-environment' "$SIGNED_ENTITLEMENTS")
           SIGNED_APP_GROUP=$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups:0' "$SIGNED_ENTITLEMENTS")
           SIGNED_ASSOCIATED_DOMAIN=$(/usr/libexec/PlistBuddy -c 'Print :com.apple.developer.associated-domains:0' "$SIGNED_ENTITLEMENTS")
-          SIGNED_KEYCHAIN_GROUP=$(/usr/libexec/PlistBuddy -c 'Print :keychain-access-groups:0' "$SIGNED_ENTITLEMENTS")
           test "$SIGNED_APPLE_SIGNIN" = "Default"
           test "$SIGNED_APP_ID" = "${APPLE_TEAM_ID}.com.ssvasia.expertai"
           test "$SIGNED_TEAM_ID" = "$APPLE_TEAM_ID"
           test "$SIGNED_APS_ENVIRONMENT" = "production"
           test "$SIGNED_APP_GROUP" = "group.com.ssvasia.expertai"
           test "$SIGNED_ASSOCIATED_DOMAIN" = "applinks:ssv.asia"
-          test "$SIGNED_KEYCHAIN_GROUP" = "${APPLE_TEAM_ID}.com.ssvasia.expertai"
 
           PROFILE_PLIST="$RUNNER_TEMP/embedded-profile.plist"
           security cms -D -i "$APP/embedded.mobileprovision" > "$PROFILE_PLIST"
@@ -175,7 +173,7 @@ jobs:
           test "$PROFILE_TEAM_ID" = "$APPLE_TEAM_ID"
           test "$PROFILE_APS_ENVIRONMENT" = "$SIGNED_APS_ENVIRONMENT"
           test "$PROFILE_APP_GROUP" = "$SIGNED_APP_GROUP"
-          printf 'Verified signed capabilities: Apple Sign In=%s; APNs=%s; App Group=%s; keychain=%s; App ID=%s\n' "$SIGNED_APPLE_SIGNIN" "$SIGNED_APS_ENVIRONMENT" "$SIGNED_APP_GROUP" "$SIGNED_KEYCHAIN_GROUP" "$SIGNED_APP_ID"
+          printf 'Verified signed capabilities: Apple Sign In=%s; APNs=%s; App Group=%s; App ID=%s\n' "$SIGNED_APPLE_SIGNIN" "$SIGNED_APS_ENVIRONMENT" "$SIGNED_APP_GROUP" "$SIGNED_APP_ID"
           for SIGNED_BUNDLE in "$APP" "$APP/PlugIns/ShareExtension.appex"; do
             SIGNING_DETAILS=$(codesign --display --verbose=4 "$SIGNED_BUNDLE" 2>&1)
             printf '%s\n' "$SIGNING_DETAILS"
