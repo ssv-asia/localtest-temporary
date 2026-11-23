@@ -92,11 +92,20 @@
   assertions, and CocoaPods passed. Xcode stopped during signing because the
   Apple Developer account reached its certificate limit and no provisioning
   profiles matched the app or Share Extension. No IPA was exported or uploaded.
-- GitHub has the App Store Connect API key but no reusable signing
-  certificate/profile secret. A valid Apple Distribution certificate and
-  private key must be provided to CI, or an unused certificate slot must be
-  freed in the Apple Developer account. Do not repeat the run unchanged or
-  revoke an unidentified certificate.
+- The successful Build 7 GitHub run used Xcode automatic signing: its archive
+  step used an `Apple Development: Created via API` identity, while export
+  performs App Store distribution signing. The App Store Connect API key is
+  configured; a stored P12 is not required for this managed-signing flow.
+- A read-only App Store Connect API audit on `e966c55` found ten `DEVELOPMENT`
+  certificates named `Created via API`, with no profile references in the
+  portal API response; six other entries are Mac-related or belong to another
+  team member. Since Xcode-managed development profiles do not appear in that
+  API listing, treat the ten as CI-created candidates and do not touch the
+  unrelated certificates.
+- The signed workflow now disables signing during archive and checks that both
+  exported app bundles carry an Apple Distribution identity. This avoids
+  creating another development certificate and verifies distribution signing
+  before artifact upload.
 
 ## Keyboard follow-up build 7 — 22 November 2026
 
