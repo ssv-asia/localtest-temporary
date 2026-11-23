@@ -93,6 +93,19 @@ The Quick Actions routing flag is module-internal for scene-delegate access.
 This correction requires a new signed build and log/artifact inspection before
 any upload.
 
+## Build 8 signing-account blocker — 23 November 2026
+
+Signed run `45147356927` used source commit `4d43eca41b2abdd1f2259c31eb1de1382e700ff6`.
+Expo prebuild, the scene and Quick Actions checks, and CocoaPods passed. Xcode
+then stopped during signing: the Apple Developer account has reached its
+certificate limit and no matching profiles were available for
+`com.ssvasia.expertai` or `com.ssvasia.expertai.share-extension`. No IPA was
+exported or uploaded. Repository secrets include the App Store Connect API
+key, but no reusable signing certificate/profile. Resolve signing by making an
+existing valid Apple Distribution certificate available to CI with its private
+key, or by freeing a certificate slot in the Apple Developer account; do not
+retry unchanged or revoke a certificate without identifying it as unused.
+
 ## iOS keyboard follow-up — 22 November 2026
 
 The owner reported that build 6 still left excess space below the composer and

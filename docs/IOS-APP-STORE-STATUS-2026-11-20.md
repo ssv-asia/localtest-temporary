@@ -85,6 +85,19 @@
 - These changes are source-only until a fresh signed run passes archive,
   export, and artifact inspection. Do not upload run `45143238275`.
 
+## Build 8 signing-account blocker — 23 November 2026
+
+- Signed run `45147356927` used commit
+  `4d43eca41b2abdd1f2259c31eb1de1382e700ff6`. Prebuild, scene/Quick Actions
+  assertions, and CocoaPods passed. Xcode stopped during signing because the
+  Apple Developer account reached its certificate limit and no provisioning
+  profiles matched the app or Share Extension. No IPA was exported or uploaded.
+- GitHub has the App Store Connect API key but no reusable signing
+  certificate/profile secret. A valid Apple Distribution certificate and
+  private key must be provided to CI, or an unused certificate slot must be
+  freed in the Apple Developer account. Do not repeat the run unchanged or
+  revoke an unidentified certificate.
+
 ## Keyboard follow-up build 7 — 22 November 2026
 
 - Build 6's keyboard layout was still reported as visually incorrect on iPhone:
