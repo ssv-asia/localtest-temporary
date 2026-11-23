@@ -565,19 +565,19 @@ export function SidePanel({
           })()
         ) : (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }}>
-            <View style={{ flexDirection: 'row', gap: 8, backgroundColor: colors.background, borderRadius: 10, padding: 4, borderWidth: 1, borderColor: colors.border }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.background, borderRadius: 10, padding: 4, borderWidth: 1, borderColor: colors.border }}>
               <TextInput
                 value={newProjectName}
                 onChangeText={setNewProjectName}
                 placeholder="Name a new project…"
                 placeholderTextColor={colors.textSecondary}
-                style={{ flex: 1, fontFamily: Fonts.sans, fontSize: 13, color: colors.text, paddingHorizontal: 8 }}
+                style={{ flex: 1, minHeight: 44, fontFamily: Fonts.sans, fontSize: 14, lineHeight: 20, color: colors.text, paddingHorizontal: 8, paddingVertical: 10 }}
                 onSubmitEditing={handleCreateProject}
               />
               <Pressable
                 onPress={handleCreateProject}
                 disabled={!newProjectName.trim()}
-                style={{ paddingHorizontal: 12, justifyContent: 'center', borderRadius: 8, backgroundColor: colors.tint, opacity: newProjectName.trim() ? 1 : 0.5 }}
+                style={{ minHeight: 44, paddingHorizontal: 12, justifyContent: 'center', borderRadius: 8, backgroundColor: colors.tint, opacity: newProjectName.trim() ? 1 : 0.5 }}
               >
                 <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 12, color: colors.onTint }}>Create</Text>
               </Pressable>

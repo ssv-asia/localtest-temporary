@@ -7,7 +7,6 @@ import {
   AppState,
   Easing,
   Keyboard,
-  KeyboardAvoidingView,
   FlatList,
   Modal,
   Platform,
@@ -1107,8 +1106,6 @@ export default function SimpleChatScreen() {
   const isDark = !isLightThemeBackground(colors.background);
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const chatScreenRef = useRef<View>(null);
-  const [keyboardVerticalOffset, setKeyboardVerticalOffset] = useState(0);
 
   // Android share-sheet target: text or a link shared from any other app
   // (browser, mail, PDF, notes…) lands here. We prefill the composer with it and
@@ -1121,42 +1118,115 @@ export default function SimpleChatScreen() {
     router.push('/(app)/servers');
   }, [router]);
 
-  // The iOS screen uses KeyboardAvoidingView below, which measures the actual
-  // keyboard frame against this screen. Keep this JS offset only for Android,
-  // where the APK's edge-to-edge window does not resize for the IME.
+  // The bottom dock is the single keyboard-inset owner. Android keeps its
+  // APK-tested adjustNothing path; iOS uses UIKit's reported keyboard frame
+  // and animates the layout with UIKit's own keyboard timing curve.
+  // Do not stack this with KeyboardAvoidingView or a second iOS composer inset.
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const keyboardPadding = useRef(new Animated.Value(0)).current;
+  const keyboardVisibleRef = useRef(false);
+  const keyboardTransitionRef = useRef(false);
+  const [sidePanelOpen, setSidePanelOpen] = useState(false);
+  const pendingSidePanelOpenRef = useRef(false);
+  const chatRootRef = useRef<View>(null);
+  const chatRootBottomRef = useRef(0);
+  const [iosKeyboardInset, setIosKeyboardInset] = useState(insets.bottom);
+  const androidKeyboardPadding = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    // Keep the compact keyboard layout in place until UIKit has finished its
-    // dismissal animation. Expanding the archive preview on keyboardWillHide
-    // pushes the composer back down while the keyboard is still on screen.
-    const hideEvent = 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, (event) => {
-      const height = Platform.OS === 'ios' ? 0 : event.endCoordinates.height + insets.bottom;
-      setIsKeyboardVisible(true);
-      keyboardPadding.stopAnimation();
-      Animated.timing(keyboardPadding, {
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const animateDockTo = (height: number, duration: number) => {
+      androidKeyboardPadding.stopAnimation();
+      Animated.timing(androidKeyboardPadding, {
         toValue: Math.max(0, height),
-        duration: 180,
+        duration: duration > 0 ? duration : 180,
         easing: Easing.out(Easing.cubic),
         isInteraction: false,
         useNativeDriver: false,
       }).start();
+    };
+    const moveDockTo = (height: number, event: Parameters<typeof Keyboard.scheduleLayoutAnimation>[0]) => {
+      if (Platform.OS === 'ios') {
+        Keyboard.scheduleLayoutAnimation(event);
+        setIosKeyboardInset(Math.max(0, height));
+      } else {
+        animateDockTo(height, event.duration);
+      }
+    };
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      keyboardVisibleRef.current = true;
+      keyboardTransitionRef.current = true;
+      setIsKeyboardVisible(true);
+      const height = Platform.OS === 'ios'
+        ? Math.max(0, chatRootBottomRef.current - event.endCoordinates.screenY)
+        : event.endCoordinates.height + insets.bottom;
+      moveDockTo(height, event);
     });
-    const hideSub = Keyboard.addListener(hideEvent, () => {
+    const hideSub = Keyboard.addListener(hideEvent, (event) => {
+      keyboardVisibleRef.current = false;
+      keyboardTransitionRef.current = true;
+      if (Platform.OS !== 'ios') {
+        setIsKeyboardVisible(false);
+        keyboardTransitionRef.current = false;
+      }
+      if (Platform.OS === 'ios') moveDockTo(insets.bottom, event);
+      else animateDockTo(insets.bottom, 160);
+    });
+    const didShowSub = Keyboard.addListener('keyboardDidShow', () => {
+      keyboardTransitionRef.current = false;
+    });
+    const didHideSub = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardVisibleRef.current = false;
+      keyboardTransitionRef.current = false;
       setIsKeyboardVisible(false);
-      keyboardPadding.stopAnimation();
-      Animated.timing(keyboardPadding, {
-        toValue: 0,
-        duration: 160,
-        easing: Easing.out(Easing.cubic),
-        isInteraction: false,
-        useNativeDriver: false,
-      }).start();
+      if (Platform.OS === 'ios') {
+        if (pendingSidePanelOpenRef.current) {
+          pendingSidePanelOpenRef.current = false;
+          setSidePanelOpen(true);
+        }
+      }
     });
-    return () => { showSub.remove(); hideSub.remove(); };
-  }, [keyboardPadding, insets.bottom]);
+    // UIKit reports real frame changes (for example QuickType height changes).
+    // Both screenY and the measured chat-root bottom use window coordinates, so
+    // their difference is the exact overlap for this device and orientation.
+    const frameSub = Platform.OS === 'ios'
+      ? Keyboard.addListener('keyboardWillChangeFrame', (event) => {
+          if (keyboardVisibleRef.current) {
+            moveDockTo(Math.max(0, chatRootBottomRef.current - event.endCoordinates.screenY), event);
+          }
+        })
+      : null;
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+      didShowSub.remove();
+      didHideSub.remove();
+      frameSub?.remove();
+    };
+  }, [androidKeyboardPadding, insets.bottom]);
+
+  useEffect(() => {
+    if (Platform.OS === 'ios' && !keyboardVisibleRef.current) {
+      setIosKeyboardInset(insets.bottom);
+    }
+  }, [insets.bottom]);
+
+  const requestWorkspacePanelOpen = useCallback(() => {
+    if (Platform.OS === 'ios' && (keyboardVisibleRef.current || Keyboard.isVisible())) {
+      pendingSidePanelOpenRef.current = true;
+      Keyboard.dismiss();
+      return;
+    }
+    setSidePanelOpen(true);
+  }, []);
+
+  const toggleWorkspacePanel = useCallback(() => {
+    if (sidePanelOpen) {
+      pendingSidePanelOpenRef.current = false;
+      setSidePanelOpen(false);
+      return;
+    }
+    requestWorkspacePanelOpen();
+  }, [requestWorkspacePanelOpen, sidePanelOpen]);
 
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const messagesRef = useRef<DisplayMessage[]>(messages);
@@ -1640,7 +1710,6 @@ export default function SimpleChatScreen() {
   const [webHistoryLoading, setWebHistoryLoading] = useState(false);
   const [webSettingsOpen, setWebSettingsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [sidePanelOpen, setSidePanelOpen] = useState(false);
   // Bumped whenever a document is saved from a message action, so the panel's
   // Documents tab picks up the new entry even if it's already open.
   const [documentsRefreshKey, setDocumentsRefreshKey] = useState(0);
@@ -5434,11 +5503,11 @@ export default function SimpleChatScreen() {
     })
       .then(() => {
         setDocumentsRefreshKey((k) => k + 1);
-        setSidePanelOpen(true);
+        requestWorkspacePanelOpen();
         buzz(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
       })
       .catch(() => setError({ message: 'Could not save this to your workspace. Please try again.' }));
-  }, [conversationId]);
+  }, [conversationId, requestWorkspacePanelOpen]);
 
   const handleScheduleFollowup = useCallback((text: string) => {
     setScheduleInitialPrompt(`Follow up on this answer and help me take the next action:\n\n${text.slice(0, 6000)}`);
@@ -5794,29 +5863,20 @@ export default function SimpleChatScreen() {
 
   return (
     <View
-      ref={chatScreenRef}
+      ref={chatRootRef}
       onLayout={() => {
-        // This route is rendered below AdaptiveNavigation's safe area and
-        // mobile header. KAV's offset is measured from the physical screen top,
-        // so measure this stable outer frame in window space.
-        chatScreenRef.current?.measureInWindow((_x, y) => {
-          setKeyboardVerticalOffset((current) => Math.abs(current - y) > 1 ? y : current);
+        chatRootRef.current?.measureInWindow((_x, y, _width, height) => {
+          chatRootBottomRef.current = y + height;
         });
       }}
       style={styles.container}
     >
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior="padding"
-        enabled={Platform.OS === 'ios'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardVerticalOffset : 0}
-      >
     <Animated.View
       style={[
         styles.container,
         {
           backgroundColor: colors.background,
-          paddingBottom: Platform.OS === 'ios' ? 0 : keyboardPadding,
+          paddingBottom: Platform.OS === 'ios' ? iosKeyboardInset : androidKeyboardPadding,
         },
       ]}
     >
@@ -6036,7 +6096,7 @@ export default function SimpleChatScreen() {
                   placeholder="Empty file"
                   placeholderTextColor={colors.textTertiary}
                   style={{
-                    maxHeight: isKeyboardVisible ? 112 : 300,
+                    maxHeight: 300,
                     padding: 12,
                     fontFamily: 'monospace',
                     fontSize: 12.5,
@@ -6046,12 +6106,6 @@ export default function SimpleChatScreen() {
                     borderTopColor: colors.border,
                   }}
                 />
-              ) : isKeyboardVisible ? (
-                <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.border }}>
-                  <Text style={{ fontFamily: Fonts.sans, fontSize: 11, color: colors.textTertiary }}>
-                    Document preview paused while you type
-                  </Text>
-                </View>
               ) : (
                 <ScrollView
                   style={{ maxHeight: 300, borderTopWidth: 1, borderTopColor: colors.border }}
@@ -6242,7 +6296,14 @@ export default function SimpleChatScreen() {
           alignSelf: 'center',
         }}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+        onContentSizeChange={() => {
+          // The flex-growing welcome screen changes content height as the iOS
+          // dock animates around the keyboard. Scrolling that empty state on
+          // every size tick caused visible jumps and made prompt chips move
+          // under the user's finger. Real conversations still auto-follow.
+          if (messages.length === 0 || keyboardTransitionRef.current) return;
+          listRef.current?.scrollToEnd({ animated: true });
+        }}
         showsVerticalScrollIndicator={false}
       >
         {messages.length === 0 ? (
@@ -6572,7 +6633,7 @@ export default function SimpleChatScreen() {
         </Pressable>
         <Pressable
           onLayout={(event) => registerOnboardingChild('workspace', 'toolbar', event.nativeEvent.layout)}
-          onPress={() => setSidePanelOpen((v) => !v)}
+          onPress={toggleWorkspacePanel}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel={sidePanelOpen ? 'Close workspace panel' : 'Open workspace panel (documents & canvas)'}
@@ -6602,9 +6663,9 @@ export default function SimpleChatScreen() {
         style={[
           styles.inputRow,
           {
-            paddingBottom: isKeyboardVisible
-              ? (Platform.OS === 'ios' ? 0 : 10)
-              : (Platform.OS === 'ios' ? insets.bottom : insets.bottom + 10),
+            paddingBottom: Platform.OS === 'ios'
+              ? 0
+              : isKeyboardVisible ? 10 : insets.bottom + 10,
             borderTopColor: colors.border,
             backgroundColor: colors.background,
           },
@@ -6617,7 +6678,7 @@ export default function SimpleChatScreen() {
           onChangeText={setInput}
           placeholder="Message"
           placeholderTextColor={colors.textTertiary}
-          style={[styles.textInput, { color: colors.text, backgroundColor: colors.buttonBackground }]}
+          style={[styles.textInput, { fontFamily: Fonts.sans, lineHeight: 20, minHeight: 40, color: colors.text, backgroundColor: colors.buttonBackground }]}
           multiline
           onSubmitEditing={handleSend}
         />
@@ -8292,31 +8353,6 @@ export default function SimpleChatScreen() {
         }}
       />
 
-      {/* Workspace side panel — documents & canvas. It is not mounted during
-          onboarding so its sheet cannot leak through on mobile or wide screens. */}
-      {!onboardingOpen ? <SidePanel
-        visible={sidePanelOpen && !onboardingOpen}
-        onClose={() => setSidePanelOpen(false)}
-        conversationId={conversationId}
-        colors={{
-          background: colors.background,
-          surface: colors.sheetBackground,
-          text: colors.text,
-          textSecondary: colors.textSecondary,
-          border: colors.border,
-          // Tint here is `colors.text` in dark themes (e.g. expertAI's light-lavender
-          // text color) — white text on that light tint is what was unreadable.
-          // Contrast against the tint's actual color, not assumed-dark accent.
-          tint: colors.accent,
-          onTint: colors.onTint,
-        }}
-        refreshKey={documentsRefreshKey}
-        conversations={conversations}
-        onOpenConversation={handleOpenConversationId}
-        onNewChatInProject={handleNewChatInProject}
-        onOpenArchiveFile={handleOpenArchiveFile}
-      /> : null}
-
       {/* AI Disclaimer Modal (shown on first launch) */}
       <AIDisclaimerModal
         visible={showAiDisclaimer}
@@ -8422,8 +8458,49 @@ export default function SimpleChatScreen() {
           }}
         />
       ) : null}
+      {Platform.OS !== 'ios' && !onboardingOpen ? <SidePanel
+        visible={sidePanelOpen && !onboardingOpen}
+        onClose={() => setSidePanelOpen(false)}
+        conversationId={conversationId}
+        colors={{
+          background: colors.background,
+          surface: colors.sheetBackground,
+          text: colors.text,
+          textSecondary: colors.textSecondary,
+          border: colors.border,
+          tint: colors.accent,
+          onTint: colors.onTint,
+        }}
+        refreshKey={documentsRefreshKey}
+        conversations={conversations}
+        onOpenConversation={handleOpenConversationId}
+        onNewChatInProject={handleNewChatInProject}
+        onOpenArchiveFile={handleOpenArchiveFile}
+      /> : null}
     </Animated.View>
-    </KeyboardAvoidingView>
+    {/* Keep the archive/workspace surface out of the keyboard-resized dock.
+        The prior nesting made its absolute bottom sheet change height and
+        translate with the composer; it also exposed its accent buttons through
+        the keyboard. Opening is deferred until keyboardDidHide above. */}
+    {Platform.OS === 'ios' && sidePanelOpen && !onboardingOpen ? <SidePanel
+      visible={sidePanelOpen && !onboardingOpen}
+      onClose={() => setSidePanelOpen(false)}
+      conversationId={conversationId}
+      colors={{
+        background: colors.background,
+        surface: colors.sheetBackground,
+        text: colors.text,
+        textSecondary: colors.textSecondary,
+        border: colors.border,
+        tint: colors.accent,
+        onTint: colors.onTint,
+      }}
+      refreshKey={documentsRefreshKey}
+      conversations={conversations}
+      onOpenConversation={handleOpenConversationId}
+      onNewChatInProject={handleNewChatInProject}
+      onOpenArchiveFile={handleOpenArchiveFile}
+    /> : null}
     </View>
   );
 }
@@ -8512,8 +8589,11 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 8,
+    minHeight: 40,
+    fontFamily: Fonts.sans,
     fontSize: 15,
+    lineHeight: 20,
     maxHeight: 120,
   },
   sendButton: {

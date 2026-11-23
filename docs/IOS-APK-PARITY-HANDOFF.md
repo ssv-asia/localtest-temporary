@@ -21,6 +21,48 @@ including launch, cold-start links, quick actions, and foreground/background
 transitions, plus an older supported iOS version. No build or upload was made
 for this change.
 
+## Build 9 Simple Chat keyboard and workspace panel correction — 23 November 2026
+
+The owner reports that TestFlight build 8 still lets the composer overlap the
+iOS keyboard, changes the bottom gap after dismissal, and shows the purple
+workspace/archive panel moving with the composer or behind the keyboard. The
+previous diagnosis targeted `features/navigation/components/workspace-sheet`,
+but the purple panel in Simple Chat is `components/side-panel.tsx`.
+
+The source cause is confirmed in the component tree: Simple Chat placed the
+full-screen absolute `SidePanel` inside the same `Animated.View` wrapped by
+`KeyboardAvoidingView`. The keyboard changed that subtree's available height;
+the panel also calculates its height from `useWindowDimensions()`. It therefore
+resized and translated with the chat dock. The archive toolbar opened it
+immediately even with the keyboard visible, so its purple buttons remained
+under the iOS keyboard. The earlier build 8 change addressed a different sheet
+and did not fix this path.
+
+The build 9 source moves only the iOS `SidePanel` outside the keyboard-moving
+view. A request to open it from the chat toolbar while typing is deferred until
+`keyboardDidHide`, so it cannot slide in behind the chat keyboard. If a text
+field inside an already-open panel is focused, the panel stays mounted instead
+of losing that field. Simple Chat computes keyboard overlap from the measured
+chat-root bottom and UIKit's keyboard `screenY` in the same window coordinate
+space, then uses `Keyboard.scheduleLayoutAnimation` to follow UIKit's timing
+curve. The resting home-indicator inset is restored in the same coordinated
+layout. Android keeps its existing animated path.
+
+The empty welcome state no longer runs an animated `scrollToEnd` every time its
+flex-grown content changes height during keyboard motion. That was a second
+source of title/prompt movement and missed first taps. Normal non-empty chat
+still auto-follows new content. The document preview's existing manual fold
+control remains; the keyboard-triggered pause was removed to avoid a preview
+disappear/reappear during keyboard transitions. The main composer now
+explicitly uses DM Sans and a stable line height, and the project-name field
+has a 44-point minimum height.
+
+Build 8 is not fixed by this source change. Build 9 has not yet been built or
+tested on a device. Verify an empty chat and an open archive document on the
+iPhone XR and iPhone 17: composer top/bottom against the keyboard and home
+indicator, repeated show/hide, archive button while typing, manual preview fold,
+and project field size. Also check QuickType and landscape before distribution.
+
 ## Workspace sheet and keyboard overlap — 23 November 2026
 
 The mobile workspace picker is an animated overlay in the chat window. It used

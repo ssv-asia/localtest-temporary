@@ -21,6 +21,32 @@
   links, universal links, quick actions, foreground/background transitions,
   and an older supported iOS version before calling the fix verified.
 
+## Build 9 keyboard correction — 23 November 2026
+
+- The owner reports that TestFlight build 8 still shows the composer too low
+  during keyboard transitions and exposes the purple archive/workspace panel
+  behind or moving with the keyboard.
+- The prior source diagnosis targeted the navigation workspace picker. The
+  purple panel is the chat `SidePanel`, which was actually rendered inside the
+  `KeyboardAvoidingView` subtree. Its absolute root and `useWindowDimensions`
+  height followed the keyboard-resized chat view. The toolbar also opened it
+  immediately while the keyboard was visible.
+- The build 9 candidate moves the iOS panel outside the keyboard-moving view
+  and defers toolbar opens until a requested keyboard dismissal completes.
+  It calculates keyboard overlap from the chat root's measured bottom and
+  UIKit's `screenY`, then uses UIKit-synchronized layout animation for the dock.
+  Android keeps its existing behavior.
+- The empty welcome screen's auto-scroll-on-every-content-resize is gated off,
+  since keyboard-driven flex changes repeatedly animated its title and prompt
+  buttons. Non-empty chats retain auto-follow behavior.
+- The archive preview's manual fold control remains. The previous automatic
+  “preview paused while typing” behavior was removed. Composer font and project
+  field minimum height were made explicit.
+- Candidate version/build: `1.5.3 (9)`. Source changes are not device-verified.
+  Do not claim the keyboard or panel issue is fixed until XR and iPhone 17
+  TestFlight checks pass for empty chat, archive preview, QuickType, keyboard
+  dismissal, and opening the panel while typing.
+
 ## Workspace sheet and keyboard overlap — 23 November 2026
 
 - The mobile workspace picker is a custom animated overlay in the same React
