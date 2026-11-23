@@ -115,6 +115,13 @@ signing disabled, then requires both exported app bundles to verify with an
 Apple Distribution identity. This avoids requesting another development
 certificate and checks the actual distribution signature before upload.
 
+With the owner's confirmation, guarded cleanup run `45151911607` rechecked
+each candidate's ID, serial number, `DEVELOPMENT` type, `Created via API` name,
+and absence from portal-listed profiles before revoking it. A fresh read-only
+audit, run `45152005505`, now returns six certificates; all ten CI-created
+Development certificates are gone. Mac certificates, Savitri's certificates,
+and the separate Distribution Managed identity were not targeted.
+
 ## iOS keyboard follow-up — 22 November 2026
 
 The owner reported that build 6 still left excess space below the composer and

@@ -106,6 +106,11 @@
   exported app bundles carry an Apple Distribution identity. This avoids
   creating another development certificate and verifies distribution signing
   before artifact upload.
+- With the owner's confirmation, guarded cleanup run `45151911607` rechecked
+  each CI certificate's ID, serial, type, name, and profile references before
+  revoking it. Follow-up audit `45152005505` returns six certificates; the ten
+  CI-created Development certificates are gone. Mac and Savitri certificates
+  and Distribution Managed were left alone.
 
 ## Keyboard follow-up build 7 — 22 November 2026
 
