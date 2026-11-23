@@ -57,6 +57,21 @@
   with QuickType visible/hidden, first-tap workspace and toolbar actions,
   keyboard show/hide, and compact/landscape layouts.
 
+## Build 8 prebuild correction — 23 November 2026
+
+- Signed workflow run `45142334512` failed during Expo prebuild before
+  CocoaPods or Xcode. The concrete error was that the existing Quick Actions
+  plugin could not find the legacy React Native startup call, because the new
+  scene plugin had already removed it. No IPA was created.
+- Corrected Expo mod ordering so Quick Actions transforms the source before
+  scene migration, then added cold-start quick-action routing through
+  `UIScene.ConnectionOptions.shortcutItem`. The prebuild gate now checks the
+  four Home Screen actions and both cold/warm quick-action paths are present.
+- This is a failure-specific source correction, not an Xcode/signing retry.
+  Build the exact new commit once, inspect the generated scene/shortcut config,
+  and upload only the signed IPA from that successful run. Do not upload run
+  `45142334512` because it contains no artifact.
+
 ## Keyboard follow-up build 7 — 22 November 2026
 
 - Build 6's keyboard layout was still reported as visually incorrect on iPhone:

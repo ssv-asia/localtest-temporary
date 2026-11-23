@@ -24,6 +24,11 @@ class ExpertAISceneDelegate: UIResponder, UIWindowSceneDelegate {
     appDelegate.window = window
 
     var launchOptions = appDelegate.launchOptions ?? [:]
+    if let shortcutItem = connectionOptions.shortcutItem,
+       let route = shortcutItem.userInfo?["route"] as? String,
+       let shortcutURL = URL(string: "expertai:///\\(route)") {
+      launchOptions[.url] = shortcutURL
+    }
     for context in connectionOptions.urlContexts {
       launchOptions[.url] = context.url
       if let sourceApplication = context.options.sourceApplication {

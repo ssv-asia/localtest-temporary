@@ -65,8 +65,11 @@ jobs:
           const info = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', 'ios/ExpertAI/Info.plist'], { encoding: 'utf8' }));
           const scene = info.UIApplicationSceneManifest?.UISceneConfigurations?.UIWindowSceneSessionRoleApplication?.[0];
           if (scene?.UISceneDelegateClassName !== '$(PRODUCT_MODULE_NAME).ExpertAISceneDelegate') throw new Error('iOS scene lifecycle configuration is missing.');
+          if (info.UIApplicationShortcutItems?.length !== 4) throw new Error('The four iOS Home Screen Quick Actions were not generated.');
           const appDelegate = fs.readFileSync('ios/ExpertAI/AppDelegate.swift', 'utf8');
           if (!appDelegate.includes('expert-ai-ios-scene-lifecycle')) throw new Error('iOS scene delegate was not generated.');
+          if (!appDelegate.includes('connectionOptions.shortcutItem')) throw new Error('Cold-start scene Quick Actions are not routed.');
+          if (!appDelegate.includes('routedQuickActionDuringLaunch')) throw new Error('Warm-start Quick Actions were not preserved.');
           if (appDelegate.includes('window = UIWindow(frame: UIScreen.main.bounds)')) throw new Error('Legacy app-delegate window startup remains enabled.');
           const entitlements = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', 'ios/ExpertAI/ExpertAI.entitlements'], { encoding: 'utf8' }));
           if (entitlements['aps-environment'] !== 'production') throw new Error('Production APNs entitlement is missing.');

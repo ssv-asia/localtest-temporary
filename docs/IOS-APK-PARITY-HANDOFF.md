@@ -63,6 +63,23 @@ small/landscape screens do not expose a clipped sheet edge. Android behavior
 was not changed. These are source changes only; a signed build and physical
 iPhone visual/tap verification are still required.
 
+## Build 8 prebuild correction — 23 November 2026
+
+Signed workflow run `45142334512` stopped at Expo prebuild, before CocoaPods or
+Xcode. Its log showed that `withIosSceneLifecycle` removed the legacy
+`factory.startReactNative` call before the existing Quick Actions plugin could
+patch it. The archived build guidance says to use the failed step's concrete
+assertion and correct the cause before retrying; this is a plugin composition
+order issue, not an Xcode or signing failure.
+
+The scene plugin now runs after Quick Actions in Expo's mod execution order,
+and the scene delegate routes a cold-start quick action from
+`UIScene.ConnectionOptions.shortcutItem`. The signed workflow also asserts
+that all four quick actions survive prebuild along with the scene delegate.
+Run `45142334512` produced no archive or IPA and was not uploaded. Retry the
+signed build only on this corrected source revision, then inspect the artifact
+and upload that exact run ID.
+
 ## iOS keyboard follow-up — 22 November 2026
 
 The owner reported that build 6 still left excess space below the composer and
