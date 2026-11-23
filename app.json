@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.ssvasia.expertai",
-      "buildNumber": "7",
+      "buildNumber": "8",
       "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
@@ -168,6 +168,7 @@
       "./plugins/withAndroidBilling.js",
       "./plugins/withIosQuickActions.js",
       "./plugins/withIosPodDeploymentTarget.js",
+      "./plugins/withIosSceneLifecycle.js",
       "@react-native-google-signin/google-signin",
       [
         "expo-local-authentication",

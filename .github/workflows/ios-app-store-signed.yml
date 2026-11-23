@@ -62,6 +62,12 @@ jobs:
           const project = fs.readFileSync('ios/ExpertAI.xcodeproj/project.pbxproj', 'utf8');
           if (!project.includes('com.ssvasia.expertai.share-extension')) throw new Error('Production Share Extension ID is missing.');
           if (project.includes('com.local.expertai')) throw new Error('Local-test bundle ID leaked into the production project.');
+          const info = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', 'ios/ExpertAI/Info.plist'], { encoding: 'utf8' }));
+          const scene = info.UIApplicationSceneManifest?.UISceneConfigurations?.UIWindowSceneSessionRoleApplication?.[0];
+          if (scene?.UISceneDelegateClassName !== '$(PRODUCT_MODULE_NAME).ExpertAISceneDelegate') throw new Error('iOS scene lifecycle configuration is missing.');
+          const appDelegate = fs.readFileSync('ios/ExpertAI/AppDelegate.swift', 'utf8');
+          if (!appDelegate.includes('expert-ai-ios-scene-lifecycle')) throw new Error('iOS scene delegate was not generated.');
+          if (appDelegate.includes('window = UIWindow(frame: UIScreen.main.bounds)')) throw new Error('Legacy app-delegate window startup remains enabled.');
           const entitlements = JSON.parse(execFileSync('plutil', ['-convert', 'json', '-o', '-', 'ios/ExpertAI/ExpertAI.entitlements'], { encoding: 'utf8' }));
           if (entitlements['aps-environment'] !== 'production') throw new Error('Production APNs entitlement is missing.');
           if (entitlements['com.apple.security.application-groups']?.[0] !== 'group.com.ssvasia.expertai') throw new Error('Production app group is missing.');

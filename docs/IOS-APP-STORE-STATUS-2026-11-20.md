@@ -1,5 +1,62 @@
 # iOS App Store build status — 20 November 2026
 
+## iOS 27 startup crash fix — 23 November 2026
+
+- TestFlight feedback is for production `1.5.3 (1)` on iPhone `iPhone15,3`
+  running iOS `27.2`. The crash is a main-thread UIKit `EXC_BREAKPOINT` in
+  `UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`, during scene
+  creation before normal app startup.
+- Build 1 source is commit `ca0b8a71bcb1042eeb72c37efe2a1ec8d9b372fc`, from
+  signed IPA workflow run `44677398356`; upload run `44680151196` used that
+  artifact. Build 7 source is `12bf36af9ec8c51e681c6e231925708f5e59e304`,
+  from signed IPA run `44968254759`, uploaded by run `44970195597`. Build 7's
+  changes only address keyboard layout and do not add scene lifecycle support.
+- The iOS-only config plugin `plugins/withIosSceneLifecycle.js` adds a scene
+  manifest and scene-owned React Native window startup, forwards URL, universal
+  link, quick-action, and app lifecycle callbacks, and leaves Android source
+  untouched. The signed workflow now checks that the generated scene manifest
+  and delegate are present. The next candidate is `1.5.3 (8)`.
+- Source change only. No iOS build, upload, or physical-device verification
+  was performed. Confirm build 8 starts on iOS 27.2 and retest cold-start deep
+  links, universal links, quick actions, foreground/background transitions,
+  and an older supported iOS version before calling the fix verified.
+
+## Workspace sheet and keyboard overlap — 23 November 2026
+
+- The mobile workspace picker is a custom animated overlay in the same React
+  Native window as the chat screen. Opening it while the iOS keyboard is
+  visible previously started the sheet animation immediately, leaving the
+  sheet visible beneath the keyboard as it moved.
+- The iOS workspace-picker action now dismisses the keyboard and waits for
+  `keyboardDidHide` before showing the sheet. Android keeps its existing path.
+- Source change only; no build or device verification was performed. Confirm
+  the keyboard fully closes before the sheet animates in on an iPhone.
+
+## Simple Chat keyboard and one-tap sheet follow-up — 23 November 2026
+
+- The owner's screenshots show the inline GitHub archive document preview and
+  Simple Chat's six-action toolbar consuming space while the iOS keyboard is
+  open. Build 7's Simple Chat route still passed `keyboardVerticalOffset=0`
+  despite sitting below the adaptive safe area and mobile header. React Native
+  requires the route's screen-top offset; Agent Chat already measures this.
+- The main message list used `keyboardShouldPersistTaps="never"`, which
+  consumes the first tap on an interactive child to dismiss the keyboard. It
+  now uses `handled`, so message options and other handled controls can respond
+  on the first press while tapping blank list space still dismisses the IME.
+- Simple Chat now measures its stable outer route frame with `measureInWindow`
+  and passes that value to iOS `KeyboardAvoidingView`. The archive preview
+  collapses while typing, the edit field is shorter, and the expanded layout
+  returns only after `keyboardDidHide`. This does not reuse the failed guessed
+  keyboard-height or mismatched screen/window-coordinate calculations.
+- Workspace sheet open waits for the keyboard's completed hide event, prevents
+  duplicate pending opens, and checks the native keyboard state. Workspace
+  selection now avoids duplicate route replacements from tap plus pager events,
+  dismisses after selection, and sizes to the available window.
+- Source-only candidate. No build, upload, or device verification was made.
+  On the next signed build, check the archived-document and empty-chat screens
+  with QuickType visible/hidden, first-tap workspace and toolbar actions,
+  keyboard show/hide, and compact/landscape layouts.
+
 ## Keyboard follow-up build 7 — 22 November 2026
 
 - Build 6's keyboard layout was still reported as visually incorrect on iPhone:

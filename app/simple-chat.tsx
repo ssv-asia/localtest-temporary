@@ -1107,6 +1107,8 @@ export default function SimpleChatScreen() {
   const isDark = !isLightThemeBackground(colors.background);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const chatScreenRef = useRef<View>(null);
+  const [keyboardVerticalOffset, setKeyboardVerticalOffset] = useState(0);
 
   // Android share-sheet target: text or a link shared from any other app
   // (browser, mail, PDF, notes…) lands here. We prefill the composer with it and
@@ -1126,7 +1128,10 @@ export default function SimpleChatScreen() {
   const keyboardPadding = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    // Keep the compact keyboard layout in place until UIKit has finished its
+    // dismissal animation. Expanding the archive preview on keyboardWillHide
+    // pushes the composer back down while the keyboard is still on screen.
+    const hideEvent = 'keyboardDidHide';
     const showSub = Keyboard.addListener(showEvent, (event) => {
       const height = Platform.OS === 'ios' ? 0 : event.endCoordinates.height + insets.bottom;
       setIsKeyboardVisible(true);
@@ -5788,12 +5793,24 @@ export default function SimpleChatScreen() {
     || currentConversationHasRetryTimer;
 
   return (
-    <KeyboardAvoidingView
+    <View
+      ref={chatScreenRef}
+      onLayout={() => {
+        // This route is rendered below AdaptiveNavigation's safe area and
+        // mobile header. KAV's offset is measured from the physical screen top,
+        // so measure this stable outer frame in window space.
+        chatScreenRef.current?.measureInWindow((_x, y) => {
+          setKeyboardVerticalOffset((current) => Math.abs(current - y) > 1 ? y : current);
+        });
+      }}
       style={styles.container}
-      behavior="padding"
-      enabled={Platform.OS === 'ios'}
-      keyboardVerticalOffset={0}
     >
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior="padding"
+        enabled={Platform.OS === 'ios'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? keyboardVerticalOffset : 0}
+      >
     <Animated.View
       style={[
         styles.container,
@@ -6019,7 +6036,7 @@ export default function SimpleChatScreen() {
                   placeholder="Empty file"
                   placeholderTextColor={colors.textTertiary}
                   style={{
-                    maxHeight: 300,
+                    maxHeight: isKeyboardVisible ? 112 : 300,
                     padding: 12,
                     fontFamily: 'monospace',
                     fontSize: 12.5,
@@ -6029,6 +6046,12 @@ export default function SimpleChatScreen() {
                     borderTopColor: colors.border,
                   }}
                 />
+              ) : isKeyboardVisible ? (
+                <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.border }}>
+                  <Text style={{ fontFamily: Fonts.sans, fontSize: 11, color: colors.textTertiary }}>
+                    Document preview paused while you type
+                  </Text>
+                </View>
               ) : (
                 <ScrollView
                   style={{ maxHeight: 300, borderTopWidth: 1, borderTopColor: colors.border }}
@@ -6218,7 +6241,7 @@ export default function SimpleChatScreen() {
           maxWidth: 720,
           alignSelf: 'center',
         }}
-        keyboardShouldPersistTaps="never"
+        keyboardShouldPersistTaps="handled"
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         showsVerticalScrollIndicator={false}
       >
@@ -8401,6 +8424,7 @@ export default function SimpleChatScreen() {
       ) : null}
     </Animated.View>
     </KeyboardAvoidingView>
+    </View>
   );
 }
 

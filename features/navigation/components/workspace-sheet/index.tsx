@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,13 +44,16 @@ interface WorkspaceSheetProps {
 
 export function WorkspaceSheet({ visible, onClose }: WorkspaceSheetProps) {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = Math.max(1, Math.min(SHEET_HEIGHT, windowHeight - insets.top - 24));
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
   const isDark = colorScheme === 'dark';
 
-  const translateY = useSharedValue(SHEET_HEIGHT);
+  const translateY = useSharedValue(sheetHeight);
   const overlayOpacity = useSharedValue(0);
+  const dismissPendingRef = useRef(false);
 
   const [showNewDialog, setShowNewDialog] = useState(false);
 
@@ -70,6 +74,11 @@ export function WorkspaceSheet({ visible, onClose }: WorkspaceSheetProps) {
   }, []);
 
   const selectedIndex = workspaces.findIndex((w) => w.id === selectedWorkspaceId);
+  const lastNavigatedWorkspaceRef = useRef(selectedWorkspaceId);
+
+  useEffect(() => {
+    lastNavigatedWorkspaceRef.current = selectedWorkspaceId;
+  }, [selectedWorkspaceId]);
 
   const textPrimary = isDark ? '#fefdfd' : colors.text;
   const textMuted = isDark ? '#cdc8c5' : colors.textTertiary;
@@ -79,20 +88,28 @@ export function WorkspaceSheet({ visible, onClose }: WorkspaceSheetProps) {
 
   useEffect(() => {
     if (visible) {
+      dismissPendingRef.current = false;
       translateY.value = withTiming(0, TIMING_CONFIG);
       overlayOpacity.value = withTiming(1, TIMING_CONFIG);
     } else {
-      translateY.value = withTiming(SHEET_HEIGHT, TIMING_CONFIG);
+      translateY.value = withTiming(sheetHeight, TIMING_CONFIG);
       overlayOpacity.value = withTiming(0, TIMING_CONFIG);
     }
-  }, [visible, translateY, overlayOpacity]);
+  }, [visible, sheetHeight, translateY, overlayOpacity]);
+
+  const finishDismiss = useCallback(() => {
+    dismissPendingRef.current = false;
+    onClose();
+  }, [onClose]);
 
   const dismiss = useCallback(() => {
-    translateY.value = withTiming(SHEET_HEIGHT, TIMING_CONFIG);
+    if (dismissPendingRef.current) return;
+    dismissPendingRef.current = true;
+    translateY.value = withTiming(sheetHeight, TIMING_CONFIG);
     overlayOpacity.value = withTiming(0, TIMING_CONFIG, () => {
-      runOnJS(onClose)();
+      runOnJS(finishDismiss)();
     });
-  }, [translateY, overlayOpacity, onClose]);
+  }, [sheetHeight, translateY, overlayOpacity, finishDismiss]);
 
   const scrollStripToIndex = useCallback(
     (index: number) => {
@@ -105,36 +122,37 @@ export function WorkspaceSheet({ visible, onClose }: WorkspaceSheetProps) {
 
   const getLastSession = useWorkspaceStore((s) => s.getLastSession);
 
+  const navigateToWorkspace = useCallback((id: string) => {
+    if (lastNavigatedWorkspaceRef.current === id) return;
+    lastNavigatedWorkspaceRef.current = id;
+    selectWorkspace(id);
+    const lastSession = getLastSession(id);
+    if (lastSession) {
+      router.replace(`/workspace/${id}/s/${lastSession}`);
+    } else {
+      router.replace(`/workspace/${id}`);
+    }
+  }, [selectWorkspace, getLastSession, router]);
+
   const handleWorkspacePress = useCallback(
     (id: string, index: number) => {
-      selectWorkspace(id);
-      const lastSession = getLastSession(id);
-      if (lastSession) {
-        router.replace(`/workspace/${id}/s/${lastSession}`);
-      } else {
-        router.replace(`/workspace/${id}`);
-      }
+      navigateToWorkspace(id);
       pagerRef.current?.setPage(index);
       scrollStripToIndex(index);
+      dismiss();
     },
-    [selectWorkspace, getLastSession, router, scrollStripToIndex],
+    [navigateToWorkspace, scrollStripToIndex, dismiss],
   );
 
   const handlePageSelected = useCallback(
     (index: number) => {
       const ws = workspaces[index];
       if (ws && ws.id !== selectedWorkspaceId) {
-        selectWorkspace(ws.id);
-        const lastSession = getLastSession(ws.id);
-        if (lastSession) {
-          router.replace(`/workspace/${ws.id}/s/${lastSession}`);
-        } else {
-          router.replace(`/workspace/${ws.id}`);
-        }
+        navigateToWorkspace(ws.id);
         scrollStripToIndex(index);
       }
     },
-    [workspaces, selectedWorkspaceId, selectWorkspace, getLastSession, router, scrollStripToIndex],
+    [workspaces, selectedWorkspaceId, navigateToWorkspace, scrollStripToIndex],
   );
 
   const handleAddWorkspace = useCallback(() => {
@@ -200,6 +218,7 @@ export function WorkspaceSheet({ visible, onClose }: WorkspaceSheetProps) {
           {
             backgroundColor: colors.sheetBackground,
             paddingBottom: insets.bottom + 16,
+            height: sheetHeight,
           },
           sheetStyle,
         ]}

@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   Animated,
+  Keyboard,
   Platform,
   StyleSheet,
   View,
@@ -62,6 +63,8 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
   const desktopImmersive = useDesktopStore((s) => s.immersive);
   const showSessions = hasServer && hasWorkspaces;
   const [sheetVisible, setSheetVisible] = useState(false);
+  const keyboardVisibleRef = useRef(false);
+  const pendingWorkspaceSheetRef = useRef(false);
   const [changesSheetVisible, setChangesSheetVisible] = useState(false);
   const [filesSheetVisible, setFilesSheetVisible] = useState(false);
   const [previewSheetVisible, setPreviewSheetVisible] = useState(false);
@@ -72,6 +75,34 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
   const [hoverVisible, setHoverVisible] = useState(false);
   const [showPersistentSidebar, setShowPersistentSidebar] = useState(true);
   const [sidebarWidth] = useState(SIDEBAR_DEFAULT);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    const show = Keyboard.addListener('keyboardWillShow', () => {
+      keyboardVisibleRef.current = true;
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardVisibleRef.current = false;
+      if (pendingWorkspaceSheetRef.current) {
+        pendingWorkspaceSheetRef.current = false;
+        setSheetVisible(true);
+      }
+    });
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  const openWorkspaceSheet = useCallback(() => {
+    if (Platform.OS === 'ios' && (keyboardVisibleRef.current || Keyboard.isVisible())) {
+      if (pendingWorkspaceSheetRef.current) return;
+      pendingWorkspaceSheetRef.current = true;
+      Keyboard.dismiss();
+      return;
+    }
+    setSheetVisible(true);
+  }, []);
 
   const isDark = colorScheme === "dark";
   const contentBorder = isDark ? "#3b3a39" : "rgba(0,0,0,0.12)";
@@ -397,7 +428,7 @@ export function AdaptiveNavigation({ children }: AdaptiveNavigationProps) {
         )}
         {hasServer && !isDesktopMode && (
           <MobileHeaderBar
-            onWorkspacePress={() => setSheetVisible(true)}
+            onWorkspacePress={openWorkspaceSheet}
             onFilesPress={() => {
               setChangesSheetVisible(false);
               setPreviewSheetVisible(false);

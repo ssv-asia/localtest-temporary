@@ -1,5 +1,68 @@
 # Expert AI iOS / APK parity handoff
 
+## iOS 27 startup lifecycle — 23 November 2026
+
+TestFlight feedback for production build `1.5.3 (1)` on iPhone 15 / iOS 27.2
+reports an immediate startup trap in UIKit's
+`UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`. The crash
+occurs while UIKit creates the app scene, before normal app startup. Build 7
+(`1.5.3 (7)`) does not include this fix; its source changes concern keyboard
+layout.
+
+The next source candidate increments the app build number to 8 and adds the
+iOS-only `withIosSceneLifecycle` config plugin. It moves React Native window
+creation into an app `UIWindowScene`, declares the scene manifest, and forwards
+deep links, universal links, quick actions, and scene lifecycle callbacks to
+the existing Expo app delegate. The signed IPA workflow checks the generated
+manifest and delegate. Android source is unchanged.
+
+This is not device-verified. Build 8 must be installed and checked on iOS 27.2,
+including launch, cold-start links, quick actions, and foreground/background
+transitions, plus an older supported iOS version. No build or upload was made
+for this change.
+
+## Workspace sheet and keyboard overlap — 23 November 2026
+
+The mobile workspace picker is an animated overlay in the chat window. It used
+to animate in immediately when opened while the iOS keyboard was visible, so
+the sheet could be seen beneath the keyboard during the transition. The iOS
+header action now dismisses the keyboard and opens the sheet after
+`keyboardDidHide`; Android behavior is unchanged. This source change has not
+been built or verified on a device.
+
+## Simple Chat keyboard and sheet interaction follow-up — 23 November 2026
+
+The supplied iPhone screenshots show Simple Chat with the GitHub archive
+document open. The long inline preview and six-action chat toolbar stay in the
+layout while the keyboard opens, leaving too little vertical room for the
+composer. In the build 7 source, this route also passed `keyboardVerticalOffset`
+as zero even though it is rendered below AdaptiveNavigation's safe-area and
+mobile headers. React Native defines that value as the route view's distance
+from the top of the screen; Agent Chat already measured its route, but Simple
+Chat did not. The prior guessed keyboard-height and screenY/window-height
+strategies recorded above were not reused.
+
+The chat message `ScrollView` also used `keyboardShouldPersistTaps="never"`.
+React Native deliberately consumes the first tap on a child to dismiss the
+keyboard in that mode, which matches the report that some message options
+needed a second press. It now uses `handled`, so actionable child controls
+receive the first tap while blank-area taps can still dismiss the keyboard.
+
+The iOS source now measures Simple Chat's stable outer frame in window
+coordinates and supplies that measured offset to `KeyboardAvoidingView`. While
+the keyboard is open, the document preview collapses to a compact status row;
+the editor stays available with a shorter scroll area. The compact state is
+kept through `keyboardWillHide` and released after `keyboardDidHide`, avoiding
+the preview expanding beneath a still-visible keyboard.
+
+Workspace-sheet opening now checks native keyboard visibility, uses one
+pending-open handoff until `keyboardDidHide`, and ignores duplicate taps during
+that handoff. Selecting a workspace de-duplicates the tap and pager route
+updates, then dismisses the sheet. Its height follows the available window so
+small/landscape screens do not expose a clipped sheet edge. Android behavior
+was not changed. These are source changes only; a signed build and physical
+iPhone visual/tap verification are still required.
+
 ## iOS keyboard follow-up — 22 November 2026
 
 The owner reported that build 6 still left excess space below the composer and
