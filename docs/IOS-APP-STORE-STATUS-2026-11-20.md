@@ -459,3 +459,34 @@ once the signed sandbox build is ready; do not request or record its password.
   for every configured SKU and restore, Apple/Google/OTP sign-in, trial, and
   daily-note writes. Internal upload success does not prove those live Apple
   or device flows.
+
+### Apple Sign in entitlement signing fix — 23 November 2026
+
+- Build 9 source was `main` at
+  `b8601e69fd3333604bda23c251ea753bc87e1fd9`; it is version `1.5.3`, build
+  `9`, with `usesAppleSignIn` enabled and the custom `withIosSceneLifecycle`
+  plugin active.
+- The Apple sign-in client requests a Gateway nonce, starts native
+  `AppleAuthentication.signInAsync`, then submits the identity token to
+  `/auth/apple/verify`. The reported native “authorization attempt failed for
+  an unknown reason” is returned before token verification; it is distinct
+  from the earlier Gateway signature-verification error.
+- Build 9's exact signed IPA has now been inspected. Its bundle ID and embedded
+  profile match team `73J5VPA4QR`; the profile allows
+  `com.apple.developer.applesignin = [Default]`, but the main app executable's
+  signed entitlements omit that key. The signed executable also omits the
+  profile-authorized APNs, App Group, and associated-domain entitlements.
+  Apple's documentation identifies the Sign in with Apple entitlement as
+  required. This is the concrete native sign-in defect; Gateway nonce issuance
+  and token verification are not the cause.
+- The signing workflow generated the entitlement plist but explicitly
+  disabled code signing during archive, then exported/re-signed the archive.
+  Build 9's final signature therefore did not carry the entitlement. Build 10
+  removes those unsigned-archive overrides and validates the signed app's
+  Apple Sign in, APNs, App Group, associated-domain, app-ID, and Team-ID
+  entitlements plus the embedded provisioning profile before the IPA artifact
+  can be uploaded.
+- The Expo 8.0.8 patch retains only native NSError domain/code diagnostics as
+  fallback evidence if Apple authorization still fails. The earlier scene
+  anchor change was removed because the evidence did not establish it as a
+  cause. iOS build number is `10`; no Gateway source or deployment is changed.

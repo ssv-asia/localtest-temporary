@@ -1,0 +1,69 @@
+diff --git a/node_modules/expo-apple-authentication/ios/AppleAuthenticationExceptions.swift b/node_modules/expo-apple-authentication/ios/AppleAuthenticationExceptions.swift
+index b4d01e7..2652f1a 100644
+--- a/node_modules/expo-apple-authentication/ios/AppleAuthenticationExceptions.swift
++++ b/node_modules/expo-apple-authentication/ios/AppleAuthenticationExceptions.swift
+@@ -44,8 +44,22 @@ final class RequestNotInteractiveException: Exception {
+ }
+ 
+ final class RequestUnknownException: Exception {
++  private let nativeErrorCode: String?
++
++  init(nativeError: NSError? = nil) {
++    if let nativeError {
++      nativeErrorCode = "\(nativeError.domain) code \(nativeError.code)"
++    } else {
++      nativeErrorCode = nil
++    }
++    super.init()
++  }
++
+   override var reason: String {
+-    "The authorization attempt failed for an unknown reason"
++    if let nativeErrorCode {
++      return "The authorization attempt failed for an unknown reason (\(nativeErrorCode))."
++    }
++    return "The authorization attempt failed for an unknown reason"
+   }
+ }
+ 
+@@ -55,10 +69,10 @@ final class RequestMatchedExcludedCredentialException: Exception {
+   }
+ }
+ 
+-func exceptionForAuthorizationError(_ error: ASAuthorizationError) -> Exception {
++func exceptionForAuthorizationError(_ error: ASAuthorizationError, nativeError: NSError? = nil) -> Exception {
+   switch error.code {
+   case .unknown:
+-    return RequestUnknownException()
++    return RequestUnknownException(nativeError: nativeError)
+   case .canceled:
+     return RequestCanceledException()
+   case .invalidResponse:
+@@ -74,6 +88,6 @@ func exceptionForAuthorizationError(_ error: ASAuthorizationError) -> Exception
+     return RequestMatchedExcludedCredentialException()
+   #endif
+   @unknown default:
+-    return RequestUnknownException()
++    return RequestUnknownException(nativeError: nativeError)
+   }
+ }
+diff --git a/node_modules/expo-apple-authentication/ios/AppleAuthenticationRequest.swift b/node_modules/expo-apple-authentication/ios/AppleAuthenticationRequest.swift
+index d933f9c..4ef69d6 100644
+--- a/node_modules/expo-apple-authentication/ios/AppleAuthenticationRequest.swift
++++ b/node_modules/expo-apple-authentication/ios/AppleAuthenticationRequest.swift
+@@ -66,11 +66,13 @@ final class AppleAuthenticationRequest: NSObject, ASAuthorizationControllerPrese
+   }
+ 
+   func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
++    let nativeError = error as NSError
+     if let error = error as? ASAuthorizationError {
+-      log.error("Apple authorization failed: \(error.localizedDescription)")
+-      callback?(nil, exceptionForAuthorizationError(error))
++      log.error("Apple authorization failed: domain=\(nativeError.domain) code=\(nativeError.code) description=\(nativeError.localizedDescription)")
++      callback?(nil, exceptionForAuthorizationError(error, nativeError: nativeError))
+     } else {
+-      callback?(nil, RequestUnknownException())
++      log.error("Apple authorization returned a non-ASAuthorizationError: domain=\(nativeError.domain) code=\(nativeError.code) description=\(nativeError.localizedDescription)")
++      callback?(nil, RequestUnknownException(nativeError: nativeError))
+     }
+     callback = nil
