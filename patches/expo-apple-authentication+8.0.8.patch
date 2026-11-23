@@ -48,7 +48,7 @@ index b4d01e7..2652f1a 100644
    }
  }
 diff --git a/node_modules/expo-apple-authentication/ios/AppleAuthenticationRequest.swift b/node_modules/expo-apple-authentication/ios/AppleAuthenticationRequest.swift
-index d933f9c..4ef69d6 100644
+index d933f9c..ddf6cd3 100644
 --- a/node_modules/expo-apple-authentication/ios/AppleAuthenticationRequest.swift
 +++ b/node_modules/expo-apple-authentication/ios/AppleAuthenticationRequest.swift
 @@ -66,11 +66,13 @@ final class AppleAuthenticationRequest: NSObject, ASAuthorizationControllerPrese
@@ -67,3 +67,4 @@ index d933f9c..4ef69d6 100644
 +      callback?(nil, RequestUnknownException(nativeError: nativeError))
      }
      callback = nil
+ 
