@@ -105,7 +105,7 @@ function withIosQuickActions(config) {
       if (!updated.includes(windowProperty)) {
         throw new Error('Could not find the Expo AppDelegate window property insertion point.');
       }
-      updated = updated.replace(windowProperty, `${windowProperty}  private var routedQuickActionDuringLaunch = false\n`);
+      updated = updated.replace(windowProperty, `${windowProperty}  var routedQuickActionDuringLaunch = false\n`);
     }
 
     if (!updated.includes('performActionFor shortcutItem: UIApplicationShortcutItem')) {

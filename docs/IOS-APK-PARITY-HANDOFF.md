@@ -80,6 +80,19 @@ Run `45142334512` produced no archive or IPA and was not uploaded. Retry the
 signed build only on this corrected source revision, then inspect the artifact
 and upload that exact run ID.
 
+## Build 8 Xcode archive correction — 23 November 2026
+
+Signed run `45143238275` passed Expo prebuild and CocoaPods, then Xcode failed
+compiling `AppDelegate.swift`. The exact errors were a reference to
+`reactLaunchOptions` before its declaration and an invalid `.openInPlace` key
+in `UIApplication.LaunchOptionsKey`. No IPA was exported or uploaded. The
+scene plugin now saves the method's original optional `launchOptions`, removes
+the invalid launch-options assignment, and marks a cold scene quick action as
+already routed so the AppDelegate callback does not route it a second time.
+The Quick Actions routing flag is module-internal for scene-delegate access.
+This correction requires a new signed build and log/artifact inspection before
+any upload.
+
 ## iOS keyboard follow-up — 22 November 2026
 
 The owner reported that build 6 still left excess space below the composer and

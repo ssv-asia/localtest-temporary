@@ -72,6 +72,19 @@
   and upload only the signed IPA from that successful run. Do not upload run
   `45142334512` because it contains no artifact.
 
+## Build 8 Xcode archive correction — 23 November 2026
+
+- Signed run `45143238275` passed Expo prebuild and CocoaPods, then Xcode failed
+  compiling `AppDelegate.swift`: the generated delegate referenced
+  `reactLaunchOptions` before declaration and assigned `.openInPlace` through
+  `UIApplication.LaunchOptionsKey`. No IPA was exported or uploaded.
+- The scene plugin now retains the original optional method launch options,
+  removes the invalid launch-options key assignment, and marks a cold scene
+  Quick Action as routed before the existing AppDelegate callback can duplicate
+  it. The Quick Actions routing flag is module-internal for scene delegate use.
+- These changes are source-only until a fresh signed run passes archive,
+  export, and artifact inspection. Do not upload run `45143238275`.
+
 ## Keyboard follow-up build 7 — 22 November 2026
 
 - Build 6's keyboard layout was still reported as visually incorrect on iPhone:

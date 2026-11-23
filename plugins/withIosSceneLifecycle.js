@@ -28,6 +28,7 @@ class ExpertAISceneDelegate: UIResponder, UIWindowSceneDelegate {
        let route = shortcutItem.userInfo?["route"] as? String,
        let shortcutURL = URL(string: "expertai:///\\(route)") {
       launchOptions[.url] = shortcutURL
+      appDelegate.routedQuickActionDuringLaunch = true
     }
     for context in connectionOptions.urlContexts {
       launchOptions[.url] = context.url
@@ -37,8 +38,6 @@ class ExpertAISceneDelegate: UIResponder, UIWindowSceneDelegate {
       if let annotation = context.options.annotation {
         launchOptions[.annotation] = annotation
       }
-      launchOptions[.openInPlace] = context.options.openInPlace
-
       var openOptions: [UIApplication.OpenURLOptionsKey: Any] = [
         .openInPlace: context.options.openInPlace,
       ]
@@ -150,11 +149,8 @@ function withSceneAppDelegate(config) {
       );
     }
 
-    const launchOptionsName = contents.includes('var reactLaunchOptions = launchOptions ?? [:]')
-      ? 'reactLaunchOptions'
-      : 'launchOptions';
     contents = contents
-      .replace(windowLine, `    self.launchOptions = ${launchOptionsName}\n`)
+      .replace(windowLine, '    self.launchOptions = launchOptions\n')
       .replace(startReactNative, '');
 
     const factoryProperty = '  var reactNativeFactory: RCTReactNativeFactory?\n';
