@@ -1,0 +1,121 @@
+name: Audit Apple signing assets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: macos-15
+    env:
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+    steps:
+      - name: List certificates and provisioning profile usage (read only)
+        run: |
+          node <<'NODE'
+          const crypto = require('node:crypto');
+
+          const required = [
+            'APP_STORE_CONNECT_KEY_ID',
+            'APP_STORE_CONNECT_ISSUER_ID',
+            'APP_STORE_CONNECT_PRIVATE_KEY',
+          ];
+          for (const name of required) {
+            if (!process.env[name]) throw new Error(`Missing ${name}`);
+          }
+
+          const b64url = (value) => Buffer.from(value).toString('base64url');
+          const issuedAt = Math.floor(Date.now() / 1000);
+          const header = b64url(JSON.stringify({ alg: 'ES256', kid: process.env.APP_STORE_CONNECT_KEY_ID, typ: 'JWT' }));
+          const payload = b64url(JSON.stringify({
+            iss: process.env.APP_STORE_CONNECT_ISSUER_ID,
+            iat: issuedAt,
+            exp: issuedAt + 900,
+            aud: 'appstoreconnect-v1',
+          }));
+          const unsigned = `${header}.${payload}`;
+          const signature = crypto.sign('sha256', Buffer.from(unsigned), {
+            key: process.env.APP_STORE_CONNECT_PRIVATE_KEY.replace(/\\n/g, '\n'),
+            dsaEncoding: 'ieee-p1363',
+          });
+          const token = `${unsigned}.${signature.toString('base64url')}`;
+
+          async function fetchPages(path) {
+            const rows = [];
+            const included = [];
+            let next = `https://api.appstoreconnect.apple.com${path}`;
+            while (next) {
+              const response = await fetch(next, { headers: { Authorization: `Bearer ${token}` } });
+              const body = await response.json();
+              if (!response.ok) throw new Error(`Apple API ${response.status}: ${JSON.stringify(body.errors ?? body)}`);
+              rows.push(...(body.data ?? []));
+              included.push(...(body.included ?? []));
+              next = body.links?.next ?? null;
+            }
+            return { rows, included };
+          }
+
+          (async () => {
+            const [certificateResult, profileResult] = await Promise.all([
+              fetchPages('/v1/certificates?limit=200&fields%5Bcertificates%5D=displayName,certificateType,serialNumber,platform,expirationDate,activated'),
+              fetchPages('/v1/profiles?limit=200&include=certificates,bundleId&fields%5Bprofiles%5D=name,platform,profileType,profileState,uuid,createdDate,expirationDate&fields%5Bcertificates%5D=displayName,certificateType,serialNumber,expirationDate,activated&fields%5BbundleIds%5D=identifier,name'),
+            ]);
+            const certificates = certificateResult.rows;
+            const profiles = profileResult.rows;
+
+            const certificateById = new Map(certificates.map((item) => [item.id, item]));
+            const bundleIds = new Map(profileResult.included
+              .filter((item) => item.type === 'bundleIds')
+              .map((item) => [item.id, item.attributes]));
+            const profileUses = new Map(certificates.map((item) => [item.id, []]));
+            for (const profile of profiles) {
+              const bundleId = profile.relationships?.bundleId?.data?.id;
+              const certs = profile.relationships?.certificates?.data ?? [];
+              for (const reference of certs) {
+                profileUses.get(reference.id)?.push({
+                  profile: profile.attributes?.name,
+                  state: profile.attributes?.profileState,
+                  type: profile.attributes?.profileType,
+                  expires: profile.attributes?.expirationDate,
+                  bundleId: bundleIds.get(bundleId)?.identifier ?? bundleId,
+                });
+              }
+            }
+
+            console.log(`Certificates returned: ${certificates.length}`);
+            for (const cert of certificates) {
+              console.log(JSON.stringify({
+                id: cert.id,
+                name: cert.attributes?.displayName ?? cert.attributes?.name,
+                type: cert.attributes?.certificateType,
+                serial: cert.attributes?.serialNumber,
+                platform: cert.attributes?.platform,
+                expires: cert.attributes?.expirationDate,
+                active: cert.attributes?.activated,
+                profilesReferencingIt: profileUses.get(cert.id) ?? [],
+              }));
+            }
+            console.log(`Profiles returned: ${profiles.length}`);
+            for (const profile of profiles) {
+              const bundleId = profile.relationships?.bundleId?.data?.id;
+              const certIds = profile.relationships?.certificates?.data?.map((item) => ({
+                id: item.id,
+                name: certificateById.get(item.id)?.attributes?.displayName,
+              })) ?? [];
+              console.log(JSON.stringify({
+                profileId: profile.id,
+                name: profile.attributes?.name,
+                state: profile.attributes?.profileState,
+                type: profile.attributes?.profileType,
+                created: profile.attributes?.createdDate,
+                expires: profile.attributes?.expirationDate,
+                bundleId: bundleIds.get(bundleId)?.identifier ?? bundleId,
+                certificates: certIds,
+              }));
+            }
+          })().catch((error) => { console.error(error.message); process.exitCode = 1; });
+          NODE
