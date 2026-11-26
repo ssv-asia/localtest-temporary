@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Alert,
   Modal,
   Platform,
   Pressable,
@@ -9,8 +8,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import * as Linking from 'expo-linking';
 import { Colors, Fonts } from '@/constants/theme';
+import { openExternalUrl } from '@/lib/open-external-url';
 
 interface AIDisclaimerModalProps {
   visible: boolean;
@@ -29,13 +28,8 @@ export function AIDisclaimerModal({
   const bg = isDark ? '#1a1a1a' : '#FFFFFF';
   const overlayBg = isDark ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.5)';
 
-  const handleOpenPrivacyPolicy = async () => {
-    try {
-      await Linking.openURL('https://ssv.asia/privacy-policy/');
-    } catch {
-      Alert.alert('Error', 'Could not open privacy policy link');
-    }
-  };
+  const handleOpenPrivacyPolicy = () =>
+    void openExternalUrl('https://ssv.asia/privacy-policy/', 'Privacy Policy');
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={Platform.OS === 'ios' ? () => {} : onDismiss}>

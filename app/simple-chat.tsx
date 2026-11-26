@@ -26,6 +26,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Linking from 'expo-linking';
 import * as SecureStore from 'expo-secure-store';
+import { openExternalUrl } from '@/lib/open-external-url';
 import { useMarkdown } from 'react-native-marked';
 
 import { Colors, Fonts } from '@/constants/theme';
@@ -1705,6 +1706,7 @@ export default function SimpleChatScreen() {
   }, [reconcileDurableJobs, session?.token, router]);
   const [modelId, setModelId] = useState(DEFAULT_MODEL_ID);
   const [accountOpen, setAccountOpen] = useState(false);
+  const accountScrollRef = useRef<ScrollView | null>(null);
   const [webAccountTab, setWebAccountTab] = useState<'balance' | 'plan' | 'history'>('balance');
   const [webPaymentHistory, setWebPaymentHistory] = useState<any[]>([]);
   const [webHistoryLoading, setWebHistoryLoading] = useState(false);
@@ -5345,7 +5347,7 @@ export default function SimpleChatScreen() {
       'AI Model & Data Policy',
       'Powered by OpenRouter.\n\nYour messages are sent to OpenRouter’s AI infrastructure to generate a response and are not used to train models. See our full Privacy Policy for details on data handling and retention.',
       [
-        { text: 'View Privacy Policy', onPress: () => Linking.openURL('https://ssv.asia/privacy-policy/') },
+        { text: 'View Privacy Policy', onPress: () => void openExternalUrl('https://ssv.asia/privacy-policy/', 'Privacy Policy') },
         { text: 'Close', style: 'cancel' },
       ],
     );
@@ -6243,7 +6245,7 @@ export default function SimpleChatScreen() {
       {announcement ? (
         <Pressable
           onPress={() => {
-            if (announcement.url) Linking.openURL(announcement.url).catch(() => {});
+            if (announcement.url) void openExternalUrl(announcement.url, 'announcement link');
           }}
           style={{
             marginHorizontal: 12,
@@ -7179,12 +7181,80 @@ export default function SimpleChatScreen() {
       </Modal>
 
       {/* Account sheet */}
-      <Modal visible={accountOpen} transparent animationType="slide" onRequestClose={() => setAccountOpen(false)}>
+      <Modal visible={accountOpen} transparent animationType="slide" onRequestClose={() => { setHelpCenterOpen(false); setAccountOpen(false); }}>
         <View style={styles.overlay}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Close account" style={StyleSheet.absoluteFillObject} onPress={() => setAccountOpen(false)} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Close account" style={StyleSheet.absoluteFillObject} onPress={() => { setHelpCenterOpen(false); setAccountOpen(false); }} />
           <View style={[styles.sheet, { backgroundColor: colors.sheetBackground, maxHeight: '92%' }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.sheetHandle }]} />
+            {Platform.OS === 'ios' && helpCenterOpen ? (
+              <ScrollView
+                style={{ flexGrow: 1, flexShrink: 1, minHeight: 0 }}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 28 }}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to account"
+                  onPress={() => { setHelpCenterOpen(false); accountScrollRef.current?.scrollTo({ y: 0, animated: false }); }}
+                  style={{ alignSelf: 'flex-start', paddingVertical: 8, paddingRight: 16, marginBottom: 8 }}
+                >
+                  <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 14, color: colors.accent }}>‹ Account</Text>
+                </Pressable>
+                <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 20, color: colors.text, marginBottom: 4 }}>
+                  Help Center
+                </Text>
+                <Text style={{ fontFamily: Fonts.sans, fontSize: 13, lineHeight: 19, color: colors.textSecondary, marginBottom: 12 }}>
+                  Policies, support, and account controls.
+                </Text>
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => void openExternalUrl('https://ssv.asia/privacy-policy/', 'Privacy Policy')}
+                  style={[styles.modelRow, { marginTop: 4, flexDirection: 'column', alignItems: 'flex-start' }]}
+                >
+                  <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 15, color: colors.text }}>Privacy Policy</Text>
+                  <Text style={{ fontFamily: Fonts.sans, fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>How Expert AI handles data</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => void openExternalUrl('https://ssv.asia/terms-and-conditions/', 'Terms & Conditions')}
+                  style={[styles.modelRow, { marginTop: 8, flexDirection: 'column', alignItems: 'flex-start' }]}
+                >
+                  <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 15, color: colors.text }}>Terms & Conditions</Text>
+                  <Text style={{ fontFamily: Fonts.sans, fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Terms for using Expert AI</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() => void openExternalUrl('mailto:mail@ssv.asia?subject=Expert%20AI%20Support', 'Support email')}
+                  style={[styles.modelRow, { marginTop: 8, flexDirection: 'column', alignItems: 'flex-start' }]}
+                >
+                  <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 15, color: colors.text }}>Contact Support</Text>
+                  <Text style={{ fontFamily: Fonts.sans, fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>mail@ssv.asia</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleAiModelDataPolicy}
+                  style={[styles.modelRow, { marginTop: 8, flexDirection: 'column', alignItems: 'flex-start' }]}
+                >
+                  <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 15, color: colors.text }}>AI Model & Data Policy</Text>
+                  <Text style={{ fontFamily: Fonts.sans, fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>How prompts are sent to AI services</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleClearLocalData}
+                  style={[styles.modelRow, { marginTop: 8, flexDirection: 'column', alignItems: 'flex-start' }]}
+                >
+                  <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 15, color: colors.text }}>Clear Chat History & Theme</Text>
+                  <Text style={{ fontFamily: Fonts.sans, fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Removes chat history and resets the theme. Notes, tasks, archives, and paired computers remain.</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleDeleteAccountFromHelp}
+                  style={[styles.modelRow, { marginTop: 8, flexDirection: 'column', alignItems: 'flex-start' }]}
+                >
+                  <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 15, color: colors.errorColor }}>Delete Account</Text>
+                  <Text style={{ fontFamily: Fonts.sans, fontSize: 12, color: colors.textTertiary, marginTop: 2 }}>Permanently delete your Expert AI account</Text>
+                </Pressable>
+              </ScrollView>
+            ) : (
             <ScrollView
+              ref={accountScrollRef}
               style={{ flexGrow: 1, flexShrink: 1, minHeight: 0 }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -7278,7 +7348,7 @@ export default function SimpleChatScreen() {
               Your plan unlocks the applications associated with this tier. Open the dashboard to download the desktop agent and manage connected applications.
             </Text>
             <Pressable
-              onPress={() => Linking.openURL('https://ssv.asia/dashboard')}
+              onPress={() => void openExternalUrl('https://ssv.asia/dashboard', 'download dashboard')}
               accessibilityRole="link"
               style={{ alignSelf: 'flex-start', marginTop: 10, paddingVertical: 6 }}
             >
@@ -7499,7 +7569,10 @@ export default function SimpleChatScreen() {
               support and we&apos;ll be happy to sort it out for you.
             </Text>
             <Pressable
-              onPress={() => setHelpCenterOpen(true)}
+              onPress={() => {
+                setHelpCenterOpen(true);
+                accountScrollRef.current?.scrollTo({ y: 0, animated: false });
+              }}
               style={[styles.modelRow, { justifyContent: 'center', marginTop: 8 }]}
             >
               <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 14, color: colors.text }}>
@@ -7551,6 +7624,7 @@ export default function SimpleChatScreen() {
             ) : null}
             </> : null}
             </ScrollView>
+            )}
           </View>
         </View>
       </Modal>
@@ -8081,7 +8155,7 @@ export default function SimpleChatScreen() {
               showsVerticalScrollIndicator={false}
             >
             <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 16, color: colors.text, marginBottom: 4 }}>
-              <Text onPress={() => Linking.openURL('https://ssv.asia')} style={{ textDecorationLine: 'underline' }}>ssv.asia</Text>
+              <Text onPress={() => void openExternalUrl('https://ssv.asia/', 'ssv.asia')} style={{ textDecorationLine: 'underline' }}>ssv.asia</Text>
               {accountMode === 'create' ? ' · Create account' : ' · Sign in'}
             </Text>
             <Text style={{ fontFamily: Fonts.sans, fontSize: 13, color: colors.textSecondary, marginBottom: 12 }}>
@@ -8231,7 +8305,7 @@ export default function SimpleChatScreen() {
       {/* Help Center sheet — folds the web help link, AI model/data policy, and the two
           data-control actions (clear local data, delete account) into one place, opened
           from the account sheet's "Help Center" button. */}
-      <Modal visible={helpCenterOpen} transparent animationType="fade" onRequestClose={() => setHelpCenterOpen(false)}>
+      <Modal visible={Platform.OS !== 'ios' && helpCenterOpen} transparent animationType="fade" onRequestClose={() => setHelpCenterOpen(false)}>
         <Pressable
           style={[styles.overlay, { justifyContent: 'center', paddingHorizontal: 20 }]}
           onPress={() => setHelpCenterOpen(false)}
@@ -8244,7 +8318,7 @@ export default function SimpleChatScreen() {
               Help Center
             </Text>
             <Pressable
-              onPress={() => Linking.openURL('https://ssv.asia/')}
+              onPress={() => void openExternalUrl('https://ssv.asia/', 'ssv.asia')}
               style={[styles.modelRow, { marginTop: 4, flexDirection: 'column', alignItems: 'flex-start' }]}
             >
               <Text style={{ fontFamily: Fonts.sansSemiBold, fontSize: 14, color: colors.text }}>
@@ -8312,14 +8386,14 @@ export default function SimpleChatScreen() {
               This trial gives you 30 AI questions today, no account needed. By continuing, you confirm you&apos;re 18 or older and agree to our{' '}
               <Text
                 style={{ textDecorationLine: 'underline', color: colors.text }}
-                onPress={() => Linking.openURL('https://ssv.asia/terms-and-conditions/')}
+                onPress={() => void openExternalUrl('https://ssv.asia/terms-and-conditions/', 'Terms & Conditions')}
               >
                 Terms
               </Text>{' '}
               and{' '}
               <Text
                 style={{ textDecorationLine: 'underline', color: colors.text }}
-                onPress={() => Linking.openURL('https://ssv.asia/privacy-policy/')}
+                onPress={() => void openExternalUrl('https://ssv.asia/privacy-policy/', 'Privacy Policy')}
               >
                 Privacy Policy
               </Text>
